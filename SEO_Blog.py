@@ -8,9 +8,10 @@ import matplotlib.pyplot as plt
 from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
 import logging
+import os
 
 # Constants
-API_KEY = "AIzaSyDR0Sr1VV1TJl3AFNScIdubB7JkyUsJhSo"  # Replace with your actual API key
+API_KEY ="AIzaSyDR0Sr1VV1TJl3AFNScIdubB7JkyUsJhSo"  # Replace with your actual API key
 LLM_MODEL = "gemini-1.5-pro-002"
 LLM_TEMPERATURE = 0.3
 
@@ -147,24 +148,6 @@ def visualize_word_cloud(keywords):
         st.error(f"Error generating word cloud: {e}")
         #log_error("Error in visualize_word_cloud", e)
 
-# Competitor Analysis
-def compare_with_competitors(user_keywords, competitor_content):
-    """Compares user keywords with competitor blog content."""
-    try:
-        prompt_template = PromptTemplate(
-            input_variables=["user_keywords", "competitor_content"],
-            template="""Compare the user's SEO keywords with the competitor's blog content. Identify missing keywords and provide actionable insights.\n\nUser Keywords:\n{user_keywords}\n\nCompetitor Content:\n{competitor_content}"""
-        )
-        response = (prompt_template | llm).invoke({
-            "user_keywords": ", ".join(user_keywords),
-            "competitor_content": competitor_content
-        })
-        return response.content.strip()
-    except Exception as e:
-        st.error(f"Error in competitor analysis: {e}")
-        #log_error("Error in compare_with_competitors", e)
-        return "No insights available."
-
 # Streamlit App
 def main():
     st.title("Blog SEO Analyzer")
@@ -201,16 +184,6 @@ def main():
 
             st.subheader("Keyword Word Cloud")
             visualize_word_cloud(keywords)
-
-            # Competitor Analysis
-            competitor_url = st.text_input("Enter Competitor Blog URL:")
-            if st.button("Analyze Competitor Blog"):
-                with st.spinner("Analyzing competitor blog..."):
-                    competitor_content, _, _ = retrieve_blog_content(competitor_url)
-                    if competitor_content:
-                        comparison_results = compare_with_competitors(keywords, competitor_content)
-                        st.subheader("Competitor Analysis")
-                        st.text(comparison_results)
 
 if __name__ == "__main__":
     main()
