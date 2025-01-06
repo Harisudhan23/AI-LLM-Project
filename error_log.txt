@@ -1,0 +1,22 @@
+ERROR:root:Error in suggest_seo_keywords: 403 Request had insufficient authentication scopes. [reason: "ACCESS_TOKEN_SCOPE_INSUFFICIENT"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "method"
+  value: "google.ai.generativelanguage.v1beta.GenerativeService.GenerateContent"
+}
+]
+ERROR:root:Error in generate_seo_suggestions: 403 Request had insufficient authentication scopes. [reason: "ACCESS_TOKEN_SCOPE_INSUFFICIENT"
+domain: "googleapis.com"
+metadata {
+  key: "service"
+  value: "generativelanguage.googleapis.com"
+}
+metadata {
+  key: "method"
+  value: "google.ai.generativelanguage.v1beta.GenerativeService.GenerateContent"
+}
+]
