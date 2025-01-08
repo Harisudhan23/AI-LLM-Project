@@ -1,138 +1,111 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-from urllib.parse import urlparse
-import textstat
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
+import spacy
 import logging
-import os
 
 # Constants
-API_KEY ="AIzaSyDR0Sr1VV1TJl3AFNScIdubB7JkyUsJhSo"  # Replace with your actual API key
+API_KEY = "AIzaSyDR0Sr1VV1TJl3AFNScIdubB7JkyUsJhSo"  # Replace with your actual API key
 LLM_MODEL = "gemini-1.5-pro-002"
-LLM_TEMPERATURE = 0.3
 
 # Initialize LLM
-llm = ChatGoogleGenerativeAI(api_key=API_KEY, model=LLM_MODEL, temperature=LLM_TEMPERATURE)
+llm = ChatGoogleGenerativeAI(api_key=API_KEY, model=LLM_MODEL)
 
-# # Configure logging
-# logging.basicConfig(level=logging.ERROR, filename="error_log.txt")
+# Load Spacy NLP model
+nlp = spacy.load("en_core_web_sm")
 
-# # Utility Functions
-# def log_error(message, error):
-#     """Logs error messages to a file."""
-#     logging.error(f"{message}: {error}")
+# Configure logging
+logging.basicConfig(level=logging.ERROR, filename="error_log.txt")
 
-# Step 1: Retrieve Blog Content
+
+# Utility Functions
+def log_error(message, error):
+    """Logs error messages to a file."""
+    logging.error(f"{message}: {error}")
+
+
 def retrieve_blog_content(url):
     """Fetches and parses blog content from a given URL."""
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
-        
+
         content = " ".join([p.text for p in soup.find_all('p')])
         title = soup.title.string.strip() if soup.title else "No title found"
         meta_tag = soup.find("meta", {"name": "description"}) or soup.find("meta", {"property": "og:description"})
         meta_description = meta_tag["content"].strip() if meta_tag else "No meta description found"
-        
+
         if not content.strip():
             raise ValueError("Blog content is empty or could not be retrieved.")
-        
+
         return content, title, meta_description
     except requests.exceptions.RequestException as e:
         st.error(f"Error retrieving blog content: {e}")
-        #log_error("RequestException in retrieve_blog_content", e)
+        log_error("RequestException in retrieve_blog_content", e)
     except ValueError as e:
         st.error(f"Content Error: {e}")
-        #log_error("ValueError in retrieve_blog_content", e)
+        log_error("ValueError in retrieve_blog_content", e)
     return None, None, None
 
-# Step 2: Extract Domain and Subdomain
-def extract_domain_subdomain(url):
-    """Extracts the domain and subdomain from a URL."""
-    try:
-        parsed_url = urlparse(url)
-        domain_parts = parsed_url.netloc.split('.')
-        domain = ".".join(domain_parts[-2:])
-        subdomain = parsed_url.netloc if len(domain_parts) > 2 else "No subdomain"
-        return domain, subdomain
-    except Exception as e:
-        #log_error("Error in extract_domain_subdomain", e)
-        return "Invalid domain", "Invalid subdomain"
 
-# Step 3: Calculate Readability Score
-def calculate_readability(content):
-    """Calculates Flesch-Kincaid grade and reading ease for content."""
+def extract_keywords_from_content(content):
+    """Extracts keywords from blog content using NLP."""
     try:
-        if not content or not content.strip():
-            return None, None
-        kincaid_grade = textstat.flesch_kincaid_grade(content)
-        reading_ease = textstat.flesch_reading_ease(content)
-        return kincaid_grade, reading_ease
+        doc = nlp(content)
+        keywords = [chunk.text.lower() for chunk in doc.noun_chunks]
+        keywords = list(set(keywords))  # Remove duplicates
+        return keywords
     except Exception as e:
-        #log_error("Error in calculate_readability", e)
-        return None, None
-
-# Step 4: Suggest SEO Keywords
-def suggest_seo_keywords(content):
-    """Generates SEO keyword suggestions using the LLM."""
-    try:
-        prompt = PromptTemplate(
-            input_variables=["content"],
-            template="""Analyze the following blog content and generate a list of highly relevant SEO keywords. Focus on terms with high search intent and prioritize short-tail keywords,intermediate-tail keywords.\n\nBlog Content:\n{content}"""
-        )
-        response = (prompt | llm).invoke({"content": content})
-        return [kw.strip() for kw in response.content.strip().split(",") if kw.strip()]
-    except Exception as e:
-        st.error(f"Error generating SEO keywords: {e}")
-        #log_error("Error in suggest_seo_keywords", e)
+        log_error("Error in extract_keywords_from_content", e)
         return []
 
-# Step 5: Provide SEO Suggestions
-def generate_seo_suggestions(content, title, meta_description, keywords):
-    """Generates actionable SEO suggestions using the LLM."""
+
+def optimize_seo_keywords(content, checklist_keywords):
+    """Optimizes SEO based on keyword checklist criteria and content analysis."""
     try:
         prompt = PromptTemplate(
-            input_variables=["content", "title", "meta_description", "keywords"],
-            template="""Based on the following blog content, title, meta description and SEO keywords, provide actionable suggestions to improve the blog's SEO performance:
+            input_variables=["content", "checklist_keywords"],
+            template="""Analyze the following blog content and evaluate SEO based on the provided checklist keywords:
+            
+            Blog Content:
+            {content}
+            
+            Checklist Keywords:
+            {checklist_keywords}
 
-          1. **Title** must be (50-55 characters):
-             Analyze the Current Title: {title}
-             Suggest improvements if necessary.
+            Please perform the following checks:
+            1. Check if the target keyword is relevant and aligned with user search intent.
+            2. Confirm if the keyword is not overused or duplicated across other pages.
+            3. Verify if the page title contains the primary keyword and is click-worthy.
+            4. Suggest modifiers that can enhance the title's SEO potential.
+            5. Check the length of the title and if it’s optimized.
+            6. Ensure that the primary keyword is in the H1 tag and meta description.
+            7. Ensure that the URL is SEO-friendly and contains the primary keyword.
+            8. Confirm that the primary keyword is included in the first sentence.
+            9. Review the keyword density and ensure it’s not over-optimized.
+            10. Check if keyword variations and LSI keywords are integrated into the copy.
 
-          2. **Meta Description** must be (150-155 characters):
-             Analyze the Current Meta Description: {meta_description}
-             Suggest improvements if necessary.
-
-          3. **Content**:
-             - Optimize keyword usage and structure (headings, subheadings, internal links).
-             - Ensure readability and keyword density.
-             - Suggest updates for outdated content.
-
-          Blog Content:
-          {content}
-        
-          SEO Keywords:
-          {keywords}
-         """
+            Provide actionable suggestions for improvement in a list format.
+            """
         )
-        response = (prompt | llm).invoke({
-            "content": content,
-            "title": title,
-            "meta_description": meta_description,
-            "keywords": ", ".join(keywords),
-        })
-        return response.content.strip()
-    except Exception as e:
-        st.error(f"Error generating SEO suggestions: {e}")
-        #log_error("Error in generate_seo_suggestions", e)
-        return "No suggestions available due to an error."
 
-# Step 6: Visualize Keywords as Word Cloud
+        checklist_keywords_str = ", ".join(checklist_keywords)
+        response = llm.invoke({
+            "content": content,
+            "checklist_keywords": checklist_keywords_str,
+        })
+
+        return response.content.strip().split("\n")
+    except Exception as e:
+        log_error("Error in optimize_seo_keywords", e)
+        return ["An error occurred during SEO optimization."]
+
+
 def visualize_word_cloud(keywords):
     """Creates a word cloud visualization for the given keywords."""
     if not keywords:
@@ -146,7 +119,8 @@ def visualize_word_cloud(keywords):
         st.pyplot(plt)
     except Exception as e:
         st.error(f"Error generating word cloud: {e}")
-        #log_error("Error in visualize_word_cloud", e)
+        log_error("Error in visualize_word_cloud", e)
+
 
 # Streamlit App
 def main():
@@ -156,34 +130,27 @@ def main():
     blog_url = st.text_input("Enter Blog URL:")
     if st.button("Analyze Blog"):
         with st.spinner("Analyzing blog..."):
+            # Retrieve blog content
             content, title, meta_description = retrieve_blog_content(blog_url)
             if not content:
                 return
 
-            domain, subdomain = extract_domain_subdomain(blog_url)
-            readability = calculate_readability(content)
-            keywords = suggest_seo_keywords(content)
+            # Extract keywords from blog content
+            extracted_keywords = extract_keywords_from_content(content)
+            st.subheader("Extracted Keywords from Blog Content")
+            st.write(", ".join(extracted_keywords))
+
+            # Optimize SEO using extracted keywords
+            seo_suggestions = optimize_seo_keywords(content, extracted_keywords)
 
             # Display results
-            st.subheader("Blog Details")
-            st.write(f"**Title:** {title}")
-            st.write(f"**Meta Description:** {meta_description}")
-            st.write(f"**Domain:** {domain}")
-            st.write(f"**Subdomain:** {subdomain}")
-
-            st.subheader("Readability Scores")
-            st.metric("Flesch-Kincaid Grade", f"{readability[0]:.2f}" if readability[0] else "N/A")
-            st.metric("Flesch Reading Ease", f"{readability[1]:.2f}" if readability[1] else "N/A")
-
-            st.subheader("Suggested Keywords")
-            st.write(", ".join(keywords))
-
-            st.subheader("SEO Suggestions")
-            seo_suggestions = generate_seo_suggestions(content, title, meta_description, keywords)
-            st.text(seo_suggestions)
+            st.subheader("SEO Optimization Suggestions")
+            for suggestion in seo_suggestions:
+                st.write(f"- {suggestion}")
 
             st.subheader("Keyword Word Cloud")
-            visualize_word_cloud(keywords)
+            visualize_word_cloud(extracted_keywords)
+
 
 if __name__ == "__main__":
     main()

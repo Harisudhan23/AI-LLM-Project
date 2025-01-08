@@ -20,3 +20,4 @@ metadata {
   value: "google.ai.generativelanguage.v1beta.GenerativeService.GenerateContent"
 }
 ]
+ERROR:root:Error in optimize_seo_keywords: Invalid input type <class 'dict'>. Must be a PromptValue, str, or list of BaseMessages.
