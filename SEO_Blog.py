@@ -82,8 +82,8 @@ def optimize_seo_keywords(content, page_title, meta_description, url):
     try:
         prompt = PromptTemplate(
             input_variables=["content", "page_title", "meta_description", "url"],
-            template="""Analyze the following content and evaluate it based on the SEO keyword optimization guidelines. Provide specific suggestions for improvement where applicable:
-
+            template="""Analyze the following content based on SEO keyword optimization guidelines. Provide a detailed evaluation of how well the content adheres to each guideline without offering suggestions for improvement:
+        
             Content:
             {content}
 
@@ -97,22 +97,22 @@ def optimize_seo_keywords(content, page_title, meta_description, url):
             {url}
 
             SEO Keyword Optimization Guidelines:
-            1. Ensure you are targeting the right keyword that aligns with the content and search intent.
-            2. Verify that the page satisfies the search intent of the target audience for the given keyword.
-            3. Confirm that the primary keyword is included in the page title.
-            4. Assess if the title is engaging and click-worthy to improve click-through rates.
-            5. Check if there are opportunities to add modifiers to the title (e.g., "Best", "Top", "Guide", "2025").
-            6. Ensure that you have utilized all available space in the title tag, without exceeding character limits.
-            7. Verify that the page title is wrapped in an H1 tag to ensure proper HTML structure.
-            8. Check if the primary keyword is included in the meta description.
-            9. Confirm that the primary keyword is present in the URL to improve search relevance.
-            10. Ensure the URL structure is concise, descriptive, and SEO-friendly, avoiding unnecessary parameters.
-            11. Ensure that the primary keyword is included in the first sentence of the content for better SEO alignment.
-            12. Assess whether the keyword density is optimized and not too aggressive compared to competitor content.
-            13. Ensure that variations of the primary keyword are included throughout the content to improve relevance.
-            14. Check if synonyms or LSI (Latent Semantic Indexing) keywords are used in the copy to enhance content diversity and SEO.
+            1. Evaluate whether the content aligns with the target keyword and search intent. Does the keyword fit the content, and is the content optimized for the keyword's search intent?
+            2. Assess if the page meets the user's search intent for the given keyword. Does the content satisfy what the user is looking for?
+            3. Evaluate the inclusion of the primary keyword in the page title. How effectively is it integrated?
+            4. Analyze the effectiveness of the page title in engaging users. Is it likely to attract clicks in search results?
+            5. Assess if the title could benefit from modifiers (e.g., "Best", "Top", "Guide", "2025").
+            6. Evaluate whether the title uses the maximum character length without exceeding it, ensuring it is clear and informative.
+            7. Confirm if the page title is wrapped in an H1 tag and follows correct HTML structure.
+            8. Analyze the inclusion of the primary keyword in the meta description. How well is the keyword used, and is the description compelling for users?
+            9. Evaluate the SEO-friendliness of the URL. Does it include the primary keyword and avoid unnecessary parameters?
+            10. Assess the placement of the primary keyword in the content, particularly in the first sentence.
+            11. Evaluate the keyword density. Is it balanced and consistent with competitor content?
+            12. Analyze the use of variations of the primary keyword and synonyms (LSI keywords). Are these terms used effectively throughout the content?
+            13. Evaluate the readability of the content. Is it structured in a way that is easy for users to read and digest?
+            14. Analyze how user experience factors (e.g., mobile-friendliness, load speed) may impact SEO performance.
 
-            Based on the analysis, provide an evaluation of how well the content adheres to these guidelines and any actions that should be taken to improve SEO performance.
+            Based on this analysis, provide a thorough evaluation of how well the content adheres to the above SEO keyword optimization guidelines.
             """
         )
 
@@ -136,25 +136,74 @@ def evaluate_content_quality(content):
     try:
         prompt = PromptTemplate(
             input_variables=["content"],
-            template="""Analyze the following content and evaluate it based on the guidelines below. Provide specific suggestions for improvement where applicable:
+            template="""Analyze the following blog content and evaluate it based on the content guidelines below. Provide a detailed, structured, and professional evaluation for each point. Ensure the response adheres to the following requirements:
 
-            Blog Content:
-            {content}
+1. **Bold Headings**: Each guideline title (e.g., "Spelling and Grammar") must be bold in the output for better readability.
+2. **Concise and Precise**: Each point must be addressed directly, without unnecessary verbosity.
+3. **Logical Flow**: Maintain a clear sequence, following the order of the guidelines.
+4. **No Empty Lines or Bullet Points**: The response should have no blank lines, unnecessary spaces, or empty bullet points between items.
+5. **Objective Analysis Only**: Focus solely on evaluating adherence to the guidelines. Do not provide suggestions or recommendations for improvement.
 
-            Content Quality Guidelines:
-            1. Ensure the copy is free of spelling and grammatical errors. If any issues are identified, suggest corrections.
-            2. The content should be scannable. Ensure it is easy to read with proper use of headings, bullet points, and concise formatting.
-            3. The content should be written at a readability level suitable for an 8th grader. Check for overly complex language or sentence structures.
-            4. Ensure the copy is engaging, holding the reader’s attention throughout. Suggest improvements to increase engagement if necessary.
-            5. Use short paragraphs to improve readability and avoid dense blocks of text.
-            6. The headings should be structured logically, guiding the reader through the content in a coherent flow.
-            7. Ensure that the headings are descriptive and clearly indicate the topic of each section.
-            8. Use keyword variations, LSI keywords, or synonyms in the headings to improve SEO and make the content more varied.
-            9. Incorporate bullet points and numbered lists where applicable to enhance clarity and structure.
-            10. Ensure the copy is “fresh” by being original, up-to-date, and relevant to current trends or information.
+Blog Content:
+{content}
 
-            Provide an evaluation based on these guidelines, along with any suggestions for improvement where necessary. Confirm if the content meets the guidelines or provide specific actions for optimization.
-            """
+Content Quality Guidelines:
+1. Spelling and Grammar: Examine the content for spelling and grammatical errors. Clearly state whether any issues were identified.
+2. Scannability: Assess the content's readability and formatting. Confirm if headings, bullet points, or other elements make the content easy to scan and consume.
+3. Readability: Determine if the content is written at an 8th-grade readability level. Highlight any sentences or sections that are overly complex.
+4. Engagement: Evaluate whether the content effectively captures and maintains the reader's attention throughout. Indicate any sections that might lack engagement.
+5. Paragraph Structure: Verify that paragraphs are short and structured to avoid dense blocks of text. Mention if any sections deviate from this guideline.
+6. Heading Structure: Analyze the logical flow of the headings. Confirm whether they guide the reader effectively through the content.
+7. Heading Clarity: Check if the headings are descriptive and accurately reflect the topic of each section.
+8. Keyword Usage: Evaluate the use of keyword variations, LSI keywords, or synonyms in the headings and throughout the content. Note the relevance and frequency of their usage.
+9. Use of Lists: Verify the use of bullet points and numbered lists where applicable. Confirm whether they enhance clarity and structure.
+10. Originality and Relevance: Validate the originality and relevance of the content. State whether it aligns with current trends and provides up-to-date information.
+
+The evaluation should deliver a professional, high-quality response that adheres to these standards.
+        """
+        )
+
+        response = (prompt | llm).invoke({
+            "content": content,
+        })
+        
+        # Process and return the detailed evaluation as a list
+        return response.content.strip().split("\n")
+    except Exception as e:
+        st.error(f"Error evaluating content quality: {e}")
+        log_error("Error in evaluate_content_quality", e)
+        return []
+
+def evaluate_link_quality(content):
+    """Evaluates content quality based on structured guidelines using an LLM."""
+    try:
+        prompt = PromptTemplate(
+            input_variables=["content"],
+            template="""Analyze the following page content and evaluate it based on the link-related guidelines below. Provide a detailed, structured, and professional evaluation for each point. Ensure the response adheres to the following requirements:
+
+1. **Bold Headings**: Each guideline title (e.g., "Internal Links") must be bold in the output for better readability.
+2. **Concise and Precise**: Each point must be addressed directly, without unnecessary verbosity.
+3. **Logical Flow**: Maintain a clear sequence, following the order of the guidelines.
+4. **No Empty Lines or Bullet Points**: The response should have no blank lines, unnecessary spaces, or empty bullet points between items.
+5. **Objective Analysis Only**: Focus solely on evaluating adherence to the guidelines. Do not provide suggestions or recommendations for improvement.
+
+Page Content:
+{content}
+
+Link Quality Guidelines:
+1. Internal Links: Confirm if your page contains internal links. Provide a clear statement about the presence or absence of internal links.
+2. Descriptive Anchor Text: Evaluate whether the internal links are using descriptive and relevant anchor text that clearly indicates the target content.
+3. Internal Link Optimization: Assess if the internal links are optimized based on first link priority (i.e., ensuring that the most important links appear first).
+4. Breadcrumbs: Verify whether the page includes breadcrumbs to improve navigation and user experience.
+5. Usefulness of Internal Links: Evaluate if the internal links are genuinely useful to the reader, leading to relevant and valuable content.
+6. Preferred URLs for Internal Links: Check whether all internal links are using the preferred URLs (i.e., ensuring consistency in linking to canonical versions).
+7. External Links: Confirm if your page includes external links to relevant sources, partners, or content.
+8. Affiliate and Sponsored Links: Verify that all affiliate, sponsored, or paid external links use the “NoFollow” tag to comply with SEO best practices.
+9. External Links Opening in New Window: Evaluate whether all external links are set to open in a new window, ensuring users are not navigated away from the page.
+10. Broken Links: Confirm if there are any broken links (either internal or external) on the page and specify whether they exist.
+
+The evaluation should deliver a professional, high-quality response that adheres to these standards.
+        """
         )
 
         response = (prompt | llm).invoke({
@@ -169,15 +218,13 @@ def evaluate_content_quality(content):
         return []
 
 
-
-
 # Streamlit App
 def main():
     st.title("Blog SEO Analyzer")
 
     # Input blog URL
     blog_url = st.text_input("Enter Blog URL:")
-    if st.button("Analyze Blog"):
+    if st.button("Analyze"):
         with st.spinner("Analyzing blog..."):
             # Retrieve blog content
             content, title, meta_description = retrieve_blog_content(blog_url)
@@ -195,16 +242,21 @@ def main():
             st.write(", ".join(extracted_keywords))
 
             # Optimize SEO using extracted keywords
-            st.subheader("SEO Suggestions:")
+            st.subheader("Keyword Optimization Analysis:")
             seo_suggestions = optimize_seo_keywords(content, title, meta_description, blog_url)
             for suggestion in seo_suggestions:
                 st.write(f"- {suggestion}")
+
             # Evaluate the content quality
-            st.subheader("Content Evaluation:")
+            st.subheader("Content Evaluation Analysis:")
             content_suggestion = evaluate_content_quality(content)
             for suggestion in content_suggestion:
                 st.write(f"- {suggestion}")
 
+            st.subheader("Link Quality Analysis:")
+            link_suggestion = evaluate_link_quality(content)
+            for suggestion in link_suggestion:
+                st.write(f"- {suggestion}")    
 
 if __name__ == "__main__":
     main()
