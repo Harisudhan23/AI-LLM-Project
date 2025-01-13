@@ -138,11 +138,10 @@ def evaluate_content_quality(content):
             input_variables=["content"],
             template="""Analyze the following blog content and evaluate it based on the content guidelines below. Provide a detailed, structured, and professional evaluation for each point. Ensure the response adheres to the following requirements:
 
-1. **Bold Headings**: Each guideline title (e.g., "Spelling and Grammar") must be bold in the output for better readability.
-2. **Concise and Precise**: Each point must be addressed directly, without unnecessary verbosity.
-3. **Logical Flow**: Maintain a clear sequence, following the order of the guidelines.
-4. **No Empty Lines or Bullet Points**: The response should have no blank lines, unnecessary spaces, or empty bullet points between items.
-5. **Objective Analysis Only**: Focus solely on evaluating adherence to the guidelines. Do not provide suggestions or recommendations for improvement.
+ Each guideline title (e.g., "Spelling and Grammar") must be bold in the output for better readability.
+ Each point must be addressed directly, without unnecessary verbosity.
+ Maintain a clear sequence, following the order of the guidelines.
+ Focus solely on evaluating adherence to the guidelines. Do not provide suggestions or recommendations for improvement.
 
 Blog Content:
 {content}
@@ -181,11 +180,10 @@ def evaluate_link_quality(content):
             input_variables=["content"],
             template="""Analyze the following page content and evaluate it based on the link-related guidelines below. Provide a detailed, structured, and professional evaluation for each point. Ensure the response adheres to the following requirements:
 
-1. **Bold Headings**: Each guideline title (e.g., "Internal Links") must be bold in the output for better readability.
-2. **Concise and Precise**: Each point must be addressed directly, without unnecessary verbosity.
-3. **Logical Flow**: Maintain a clear sequence, following the order of the guidelines.
-4. **No Empty Lines or Bullet Points**: The response should have no blank lines, unnecessary spaces, or empty bullet points between items.
-5. **Objective Analysis Only**: Focus solely on evaluating adherence to the guidelines. Do not provide suggestions or recommendations for improvement.
+ Each guideline title (e.g., "Internal Links") must be bold in the output for better readability.
+ Each point must be addressed directly, without unnecessary verbosity.
+ Maintain a clear sequence, following the order of the guidelines.
+ Focus solely on evaluating adherence to the guidelines. Do not provide suggestions or recommendations for improvement.
 
 Page Content:
 {content}
@@ -221,6 +219,7 @@ The evaluation should deliver a professional, high-quality response that adheres
 # Streamlit App
 def main():
     st.title("Blog SEO Analyzer")
+    st.markdown("---")
 
     # Input blog URL
     blog_url = st.text_input("Enter Blog URL:")
@@ -235,28 +234,30 @@ def main():
             st.subheader("Readability Scores")
             st.metric("Flesch-Kincaid Grade", f"{readability[0]:.2f}" if readability[0] else "N/A")
             st.metric("Flesch Reading Ease", f"{readability[1]:.2f}" if readability[1] else "N/A")  
-            
+            st.markdown("---")
+
             # Extract keywords from blog content
             extracted_keywords = extract_keywords_from_content(content)
             st.subheader("Extracted Keywords from Blog Content")
-            st.write(", ".join(extracted_keywords))
+            #st.write(", ".join(extracted_keywords))
+            st.markdown("- " + "\n- ".join(extracted_keywords))
 
             # Optimize SEO using extracted keywords
             st.subheader("Keyword Optimization Analysis:")
             seo_suggestions = optimize_seo_keywords(content, title, meta_description, blog_url)
-            for suggestion in seo_suggestions:
-                st.write(f"- {suggestion}")
+            for seo in seo_suggestions:
+                st.write(f"- {seo}")
 
             # Evaluate the content quality
             st.subheader("Content Evaluation Analysis:")
             content_suggestion = evaluate_content_quality(content)
-            for suggestion in content_suggestion:
-                st.write(f"- {suggestion}")
+            for content_suggest in content_suggestion:
+                st.write(f"- {content_suggest}")
 
             st.subheader("Link Quality Analysis:")
             link_suggestion = evaluate_link_quality(content)
-            for suggestion in link_suggestion:
-                st.write(f"- {suggestion}")    
+            for link in link_suggestion:
+                st.write(f"- {link}")    
 
 if __name__ == "__main__":
     main()
