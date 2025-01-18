@@ -1,7 +1,6 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
@@ -22,13 +21,12 @@ nlp = spacy.load("en_core_web_sm")
 # Configure logging
 logging.basicConfig(level=logging.ERROR, filename="error_log.txt")
 
-
 # Utility Functions
 def log_error(message, error):
     """Logs error messages to a file."""
     logging.error(f"{message}: {error}")
 
-
+#Retrieve blog content
 def retrieve_blog_content(url):
     """Fetches and parses blog content from a given URL."""
     try:
@@ -53,6 +51,7 @@ def retrieve_blog_content(url):
         log_error("ValueError in retrieve_blog_content", e)
     return None, None, None
 
+#Calculate Readability
 def calculate_readability(content):
     """Calculates Flesch-Kincaid grade and reading ease for content."""
     try:
@@ -65,6 +64,7 @@ def calculate_readability(content):
         log_error("Error in calculate_readability", e)
         return None, None
 
+#Extract Keywords
 def extract_keywords_from_content(content):
     """Extracts keywords from blog content using NLP."""
     try:
@@ -76,44 +76,47 @@ def extract_keywords_from_content(content):
         log_error("Error in extract_keywords_from_content", e)
         return []
 
-
+#Optimize Keywords for SEO
 def optimize_seo_keywords(content, page_title, meta_description, url):
     """Optimizes SEO keywords based on structured guidelines."""
     try:
         prompt = PromptTemplate(
             input_variables=["content", "page_title", "meta_description", "url"],
             template="""Analyze the following content based on SEO keyword optimization guidelines. Provide a detailed evaluation of how well the content adheres to each guideline without offering suggestions for improvement:
-        
-            Content:
-            {content}
+Each point must be addressed directly, without unnecessary verbosity.
+Maintain a clear sequence, following the order of the guidelines.
+Focus solely on evaluating adherence to the guidelines. Do not provide suggestions or recommendations for improvement.
 
-            Page Title:
-            {page_title}
+Content:
+{content}
 
-            Meta Description:
-            {meta_description}
+Page Title:
+{page_title}
 
-            URL:
-            {url}
+Meta Description:
+{meta_description}
 
-            SEO Keyword Optimization Guidelines:
-            1. Evaluate whether the content aligns with the target keyword and search intent. Does the keyword fit the content, and is the content optimized for the keyword's search intent?
-            2. Assess if the page meets the user's search intent for the given keyword. Does the content satisfy what the user is looking for?
-            3. Evaluate the inclusion of the primary keyword in the page title. How effectively is it integrated?
-            4. Analyze the effectiveness of the page title in engaging users. Is it likely to attract clicks in search results?
-            5. Assess if the title could benefit from modifiers (e.g., "Best", "Top", "Guide", "2025").
-            6. Evaluate whether the title uses the maximum character length without exceeding it, ensuring it is clear and informative.
-            7. Confirm if the page title is wrapped in an H1 tag and follows correct HTML structure.
-            8. Analyze the inclusion of the primary keyword in the meta description. How well is the keyword used, and is the description compelling for users?
-            9. Evaluate the SEO-friendliness of the URL. Does it include the primary keyword and avoid unnecessary parameters?
-            10. Assess the placement of the primary keyword in the content, particularly in the first sentence.
-            11. Evaluate the keyword density. Is it balanced and consistent with competitor content?
-            12. Analyze the use of variations of the primary keyword and synonyms (LSI keywords). Are these terms used effectively throughout the content?
-            13. Evaluate the readability of the content. Is it structured in a way that is easy for users to read and digest?
-            14. Analyze how user experience factors (e.g., mobile-friendliness, load speed) may impact SEO performance.
+URL:
+{url}
 
-            Based on this analysis, provide a thorough evaluation of how well the content adheres to the above SEO keyword optimization guidelines.
-            """
+SEO Keyword Optimization Guidelines:
+    Evaluate whether the content aligns with the target keyword and search intent. Does the keyword fit the content, and is the content optimized for the keyword's search intent?
+    Assess if the page meets the user's search intent for the given keyword. Does the content satisfy what the user is looking for?
+    Evaluate the inclusion of the primary keyword in the page title. How effectively is it integrated?
+    Analyze the effectiveness of the page title in engaging users. Is it likely to attract clicks in search results?
+    Assess if the title could benefit from modifiers (e.g., "Best", "Top", "Guide", "2025").
+    Evaluate whether the title uses the maximum character length without exceeding it, ensuring it is clear and informative.
+    Confirm if the page title is wrapped in an H1 tag and follows correct HTML structure.
+    Analyze the inclusion of the primary keyword in the meta description. How well is the keyword used, and is the description compelling for users?
+    Evaluate the SEO-friendliness of the URL. Does it include the primary keyword and avoid unnecessary parameters?
+    Assess the placement of the primary keyword in the content, particularly in the first sentence.
+    Evaluate the keyword density. Is it balanced and consistent with competitor content?
+    Analyze the use of variations of the primary keyword and synonyms (LSI keywords). Are these terms used effectively throughout the content?
+    Evaluate the readability of the content. Is it structured in a way that is easy for users to read and digest?
+    Analyze how user experience factors (e.g., mobile-friendliness, load speed) may impact SEO performance.
+
+Based on this analysis, provide a thorough evaluation of how well the content adheres to the above SEO keyword optimization guidelines.
+        """
         )
 
         response = (prompt | llm).invoke({
@@ -130,7 +133,7 @@ def optimize_seo_keywords(content, page_title, meta_description, url):
         log_error("Error in optimize_seo_keywords", e)
         return []
 
-
+#Evaluate Content quality of content
 def evaluate_content_quality(content):
     """Evaluates content quality based on structured guidelines using an LLM."""
     try:
@@ -147,16 +150,16 @@ Blog Content:
 {content}
 
 Content Quality Guidelines:
-1. Spelling and Grammar: Examine the content for spelling and grammatical errors. Clearly state whether any issues were identified.
-2. Scannability: Assess the content's readability and formatting. Confirm if headings, bullet points, or other elements make the content easy to scan and consume.
-3. Readability: Determine if the content is written at an 8th-grade readability level. Highlight any sentences or sections that are overly complex.
-4. Engagement: Evaluate whether the content effectively captures and maintains the reader's attention throughout. Indicate any sections that might lack engagement.
-5. Paragraph Structure: Verify that paragraphs are short and structured to avoid dense blocks of text. Mention if any sections deviate from this guideline.
-6. Heading Structure: Analyze the logical flow of the headings. Confirm whether they guide the reader effectively through the content.
-7. Heading Clarity: Check if the headings are descriptive and accurately reflect the topic of each section.
-8. Keyword Usage: Evaluate the use of keyword variations, LSI keywords, or synonyms in the headings and throughout the content. Note the relevance and frequency of their usage.
-9. Use of Lists: Verify the use of bullet points and numbered lists where applicable. Confirm whether they enhance clarity and structure.
-10. Originality and Relevance: Validate the originality and relevance of the content. State whether it aligns with current trends and provides up-to-date information.
+    Spelling and Grammar: Examine the content for spelling and grammatical errors. Clearly state whether any issues were identified.
+    Scannability: Assess the content's readability and formatting. Confirm if headings, bullet points, or other elements make the content easy to scan and consume.
+    Readability: Determine if the content is written at an 8th-grade readability level. Highlight any sentences or sections that are overly complex.
+    Engagement: Evaluate whether the content effectively captures and maintains the reader's attention throughout. Indicate any sections that might lack engagement.
+    Paragraph Structure: Verify that paragraphs are short and structured to avoid dense blocks of text. Mention if any sections deviate from this guideline.
+    Heading Structure: Analyze the logical flow of the headings. Confirm whether they guide the reader effectively through the content.
+    Heading Clarity: Check if the headings are descriptive and accurately reflect the topic of each section.
+    Keyword Usage: Evaluate the use of keyword variations, LSI keywords, or synonyms in the headings and throughout the content. Note the relevance and frequency of their usage.
+    Use of Lists: Verify the use of bullet points and numbered lists where applicable. Confirm whether they enhance clarity and structure.
+    Originality and Relevance: Validate the originality and relevance of the content. State whether it aligns with current trends and provides up-to-date information.
 
 The evaluation should deliver a professional, high-quality response that adheres to these standards.
         """
@@ -173,6 +176,7 @@ The evaluation should deliver a professional, high-quality response that adheres
         log_error("Error in evaluate_content_quality", e)
         return []
 
+#Evaluate Link quality of content
 def evaluate_link_quality(content):
     """Evaluates content quality based on structured guidelines using an LLM."""
     try:
@@ -207,7 +211,7 @@ The evaluation should deliver a professional, high-quality response that adheres
         response = (prompt | llm).invoke({
             "content": content,
         })
-        
+          
         # Process and return the detailed evaluation as a list
         return response.content.strip().split("\n")
     except Exception as e:
@@ -237,27 +241,25 @@ def main():
             st.markdown("---")
 
             # Extract keywords from blog content
-            extracted_keywords = extract_keywords_from_content(content)
-            st.subheader("Extracted Keywords from Blog Content")
+            #extracted_keywords = extract_keywords_from_content(content)
+            #st.subheader("Extracted Keywords from Blog Content")
             #st.write(", ".join(extracted_keywords))
-            st.markdown("- " + "\n- ".join(extracted_keywords))
+            #st.markdown("\n".join([f"- {keyword}" for keyword in enumerate(extracted_keywords)]))
 
             # Optimize SEO using extracted keywords
             st.subheader("Keyword Optimization Analysis:")
             seo_suggestions = optimize_seo_keywords(content, title, meta_description, blog_url)
-            for seo in seo_suggestions:
-                st.write(f"- {seo}")
+            st.markdown("\n".join([f"{i+1}. {suggestion}" for i, suggestion in enumerate(seo_suggestions) if suggestion.strip()]))
 
             # Evaluate the content quality
             st.subheader("Content Evaluation Analysis:")
             content_suggestion = evaluate_content_quality(content)
-            for content_suggest in content_suggestion:
-                st.write(f"- {content_suggest}")
+            st.markdown("\n".join([f"{i+1}. {suggestion}" for i, suggestion in enumerate(content_suggestion) if suggestion.strip()]))
 
+            #Evaluate the link quality
             st.subheader("Link Quality Analysis:")
             link_suggestion = evaluate_link_quality(content)
-            for link in link_suggestion:
-                st.write(f"- {link}")    
+            st.markdown("\n".join([f"{i+1}. {suggestion}" for i, suggestion in enumerate(link_suggestion) if suggestion.strip()]))   
 
 if __name__ == "__main__":
     main()

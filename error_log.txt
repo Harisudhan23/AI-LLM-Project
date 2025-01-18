@@ -24,3 +24,4 @@ ERROR:root:Error in optimize_seo_keywords: Invalid input type <class 'dict'>. Mu
 ERROR:root:Error in optimize_seo_keywords: Invalid input type <class 'dict'>. Must be a PromptValue, str, or list of BaseMessages.
 ERROR:root:Error in optimize_seo_keywords: Invalid input type <class 'dict'>. Must be a PromptValue, str, or list of BaseMessages.
 ERROR:root:Error in optimize_seo_keywords: Invalid input type <class 'dict'>. Must be a PromptValue, str, or list of BaseMessages.
+ERROR:root:RequestException in retrieve_blog_content: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
