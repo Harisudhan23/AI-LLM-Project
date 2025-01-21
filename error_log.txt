@@ -25,3 +25,5 @@ ERROR:root:Error in optimize_seo_keywords: Invalid input type <class 'dict'>. Mu
 ERROR:root:Error in optimize_seo_keywords: Invalid input type <class 'dict'>. Must be a PromptValue, str, or list of BaseMessages.
 ERROR:root:Error in optimize_seo_keywords: Invalid input type <class 'dict'>. Must be a PromptValue, str, or list of BaseMessages.
 ERROR:root:RequestException in retrieve_blog_content: ('Connection aborted.', RemoteDisconnected('Remote end closed connection without response'))
+ERROR:root:Error in evaluate_content_quality: 429 Resource has been exhausted (e.g. check quota).
+ERROR:root:Error in evaluate_content_quality: 429 Resource has been exhausted (e.g. check quota).

@@ -64,6 +64,31 @@ def calculate_readability(content):
         log_error("Error in calculate_readability", e)
         return None, None
 
+def describe_readability(kincaid_grade, reading_ease):
+    if kincaid_grade <= 5:
+        grade_description = "Easy to read, suitable for younger audiences."
+    elif 6 <= kincaid_grade <= 8:
+        grade_description = "Suitable for a general audience."
+    elif 9 <= kincaid_grade <= 12:
+        grade_description = "High school comprehension."
+    elif 13 <= kincaid_grade <= 15:
+        grade_description = "College-level comprehension."    
+    else:
+        grade_description = "Complex content, typically for academic or expert-level readers."
+    
+    if reading_ease >= 80:
+        ease_description = "Very easy to read."
+    elif 70 <= reading_ease < 80:
+        ease_description = "Easy to read."    
+    elif 50 <= reading_ease < 70:
+        ease_description = "Fairly easy to read."
+    elif 30 <= reading_ease < 50:
+        ease_description = "Difficult to read."
+    else:
+        ease_description = "Very difficult to read, often technical or academic."
+
+    return grade_description, ease_description        
+
 #Extract Keywords
 def extract_keywords_from_content(content):
     """Extracts keywords from blog content using NLP."""
@@ -176,6 +201,23 @@ The evaluation should deliver a professional, high-quality response that adheres
         log_error("Error in evaluate_content_quality", e)
         return []
 
+def extract_links(url):
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    
+    internal_links = []
+    external_links = []
+
+    for link in soup.find_all('a', href=True):
+        href = link['href']
+        # Check if the link is internal or external
+        if href.startswith('/') or url in href:
+            internal_links.append(href)
+        else:
+            external_links.append(href)
+
+    return internal_links, external_links
+
 #Evaluate Link quality of content
 def evaluate_link_quality(content):
     """Evaluates content quality based on structured guidelines using an LLM."""
@@ -193,16 +235,16 @@ Page Content:
 {content}
 
 Link Quality Guidelines:
-1. Internal Links: Confirm if your page contains internal links. Provide a clear statement about the presence or absence of internal links.
-2. Descriptive Anchor Text: Evaluate whether the internal links are using descriptive and relevant anchor text that clearly indicates the target content.
-3. Internal Link Optimization: Assess if the internal links are optimized based on first link priority (i.e., ensuring that the most important links appear first).
-4. Breadcrumbs: Verify whether the page includes breadcrumbs to improve navigation and user experience.
-5. Usefulness of Internal Links: Evaluate if the internal links are genuinely useful to the reader, leading to relevant and valuable content.
-6. Preferred URLs for Internal Links: Check whether all internal links are using the preferred URLs (i.e., ensuring consistency in linking to canonical versions).
-7. External Links: Confirm if your page includes external links to relevant sources, partners, or content.
-8. Affiliate and Sponsored Links: Verify that all affiliate, sponsored, or paid external links use the “NoFollow” tag to comply with SEO best practices.
-9. External Links Opening in New Window: Evaluate whether all external links are set to open in a new window, ensuring users are not navigated away from the page.
-10. Broken Links: Confirm if there are any broken links (either internal or external) on the page and specify whether they exist.
+    Internal Links: Confirm if your page contains internal links. Provide a clear statement about the presence or absence of internal links.
+    Descriptive Anchor Text: Evaluate whether the internal links are using descriptive and relevant anchor text that clearly indicates the target content.
+    Internal Link Optimization: Assess if the internal links are optimized based on first link priority (i.e., ensuring that the most important links appear first).
+    Breadcrumbs: Verify whether the page includes breadcrumbs to improve navigation and user experience.
+    Usefulness of Internal Links: Evaluate if the internal links are genuinely useful to the reader, leading to relevant and valuable content.
+    Preferred URLs for Internal Links: Check whether all internal links are using the preferred URLs (i.e., ensuring consistency in linking to canonical versions).
+    External Links: Confirm if your page includes external links to relevant sources, partners, or content.
+    Affiliate and Sponsored Links: Verify that all affiliate, sponsored, or paid external links use the “NoFollow” tag to comply with SEO best practices.
+    External Links Opening in New Window: Evaluate whether all external links are set to open in a new window, ensuring users are not navigated away from the page.
+    Broken Links: Confirm if there are any broken links (either internal or external) on the page and specify whether they exist.
 
 The evaluation should deliver a professional, high-quality response that adheres to these standards.
         """
@@ -219,7 +261,6 @@ The evaluation should deliver a professional, high-quality response that adheres
         log_error("Error in evaluate_content_quality", e)
         return []
 
-
 # Streamlit App
 def main():
     st.title("Blog SEO Analyzer")
@@ -234,17 +275,22 @@ def main():
             if not content:
                 return
 
-            readability = calculate_readability(content)
+            readability_grade,readability_ease = calculate_readability(content)
+            grade_description, ease_description = describe_readability(readability_grade, readability_ease)
+
+            internal_links, external_links = extract_links(blog_url)
+
             st.subheader("Readability Scores")
-            st.metric("Flesch-Kincaid Grade", f"{readability[0]:.2f}" if readability[0] else "N/A")
-            st.metric("Flesch Reading Ease", f"{readability[1]:.2f}" if readability[1] else "N/A")  
-            st.markdown("---")
+            st.markdown(f"*Flesch-Kincaid Grade Level*: **{readability_grade}** -***{grade_description}***" if readability_grade else "**Flesch-Kincaid Grade Level**: N/A")
+            st.markdown(f"*Flesch Reading Ease*: **{readability_ease}** - ***{ease_description}***" if readability_ease else "**Flesch Reading Ease**: N/A")
+ 
+            #st.markdown("---")
 
             # Extract keywords from blog content
-            #extracted_keywords = extract_keywords_from_content(content)
-            #st.subheader("Extracted Keywords from Blog Content")
-            #st.write(", ".join(extracted_keywords))
-            #st.markdown("\n".join([f"- {keyword}" for keyword in enumerate(extracted_keywords)]))
+            # extracted_keywords = extract_keywords_from_content(content)
+            # st.subheader("Extracted Keywords from Blog Content")
+            # st.write(", ".join(extracted_keywords))
+            # st.markdown("\n".join([f"- {keyword}" for keyword in enumerate(extracted_keywords)]))
 
             # Optimize SEO using extracted keywords
             st.subheader("Keyword Optimization Analysis:")
@@ -258,7 +304,8 @@ def main():
 
             #Evaluate the link quality
             st.subheader("Link Quality Analysis:")
-            link_suggestion = evaluate_link_quality(content)
+            link_content = " ".join([str(link) for link in internal_links + external_links])  # Combine all links content
+            link_suggestion = evaluate_link_quality(link_content)
             st.markdown("\n".join([f"{i+1}. {suggestion}" for i, suggestion in enumerate(link_suggestion) if suggestion.strip()]))   
 
 if __name__ == "__main__":
