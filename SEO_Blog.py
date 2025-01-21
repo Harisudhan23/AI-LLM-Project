@@ -7,10 +7,12 @@ from langchain.prompts import PromptTemplate
 import spacy
 import logging
 import textstat
+from collections import Counter
+import pandas as pd
 
 # Constants
-API_KEY = "AIzaSyDR0Sr1VV1TJl3AFNScIdubB7JkyUsJhSo"  # Replace with your actual API key
-LLM_MODEL = "gemini-1.5-pro-002"
+API_KEY = "AIzaSyDdMeUzub03ZnrXfpI-c_kJgT1zOQ-lDP4"  # Replace with your actual API key
+LLM_MODEL = "gemini-1.5-flash"
 
 # Initialize LLM
 llm = ChatGoogleGenerativeAI(api_key=API_KEY, model=LLM_MODEL)
@@ -90,15 +92,27 @@ def describe_readability(kincaid_grade, reading_ease):
     return grade_description, ease_description        
 
 #Extract Keywords
-def extract_keywords_from_content(content):
+def extract_keywords_from_content(content, top_n=10):
     """Extracts keywords from blog content using NLP."""
     try:
         doc = nlp(content)
-        keywords = [chunk.text.lower() for chunk in doc.noun_chunks]
-        keywords = list(set(keywords))  # Remove duplicates
-        return keywords
+        #keywords = [chunk.text.lower() for chunk in doc.noun_chunks]
+        #keywords = list(set(keywords))  # Remove duplicates
+        keywords = [
+            chunk.text.lower()
+            for chunk in doc.noun_chunks
+            if chunk.text.lower() not in nlp.Defaults.stop_words  # Exclude stopwords
+            
+        ]
+        
+        # Count keyword frequencies
+        keyword_counts = Counter(keywords)
+        
+        # Get the top N keywords based on frequency
+        top_keywords = [keyword for keyword, _ in keyword_counts.most_common(top_n)]
+        return top_keywords
     except Exception as e:
-        log_error("Error in extract_keywords_from_content", e)
+        log_error("Error in extract_top_keywords_from_content", e)
         return []
 
 #Optimize Keywords for SEO
@@ -219,11 +233,11 @@ def extract_links(url):
     return internal_links, external_links
 
 #Evaluate Link quality of content
-def evaluate_link_quality(content):
+def evaluate_link_quality(content, internal_links, external_links):
     """Evaluates content quality based on structured guidelines using an LLM."""
     try:
         prompt = PromptTemplate(
-            input_variables=["content"],
+            input_variables=["content", "internal_links", "external_links"],
             template="""Analyze the following page content and evaluate it based on the link-related guidelines below. Provide a detailed, structured, and professional evaluation for each point. Ensure the response adheres to the following requirements:
 
  Each guideline title (e.g., "Internal Links") must be bold in the output for better readability.
@@ -235,23 +249,24 @@ Page Content:
 {content}
 
 Link Quality Guidelines:
-    Internal Links: Confirm if your page contains internal links. Provide a clear statement about the presence or absence of internal links.
+    Internal Links: Confirm if your page contains internal links. Provide a clear statement about the presence or absence of internal links.List all internal links present in the content.
     Descriptive Anchor Text: Evaluate whether the internal links are using descriptive and relevant anchor text that clearly indicates the target content.
     Internal Link Optimization: Assess if the internal links are optimized based on first link priority (i.e., ensuring that the most important links appear first).
     Breadcrumbs: Verify whether the page includes breadcrumbs to improve navigation and user experience.
     Usefulness of Internal Links: Evaluate if the internal links are genuinely useful to the reader, leading to relevant and valuable content.
     Preferred URLs for Internal Links: Check whether all internal links are using the preferred URLs (i.e., ensuring consistency in linking to canonical versions).
-    External Links: Confirm if your page includes external links to relevant sources, partners, or content.
+    External Links: Confirm if your page includes external links to relevant sources, partners, or content. List all external links present in the content.
     Affiliate and Sponsored Links: Verify that all affiliate, sponsored, or paid external links use the “NoFollow” tag to comply with SEO best practices.
     External Links Opening in New Window: Evaluate whether all external links are set to open in a new window, ensuring users are not navigated away from the page.
     Broken Links: Confirm if there are any broken links (either internal or external) on the page and specify whether they exist.
 
-The evaluation should deliver a professional, high-quality response that adheres to these standards.
-        """
+The evaluation should deliver a professional, high-quality response that adheres to these standards.        """
         )
 
         response = (prompt | llm).invoke({
             "content": content,
+            "internal_links":", ".join(internal_links) if internal_links else "None found",
+            "external_links":", ".join(external_links) if external_links else "None found"
         })
           
         # Process and return the detailed evaluation as a list
@@ -278,8 +293,6 @@ def main():
             readability_grade,readability_ease = calculate_readability(content)
             grade_description, ease_description = describe_readability(readability_grade, readability_ease)
 
-            internal_links, external_links = extract_links(blog_url)
-
             st.subheader("Readability Scores")
             st.markdown(f"*Flesch-Kincaid Grade Level*: **{readability_grade}** -***{grade_description}***" if readability_grade else "**Flesch-Kincaid Grade Level**: N/A")
             st.markdown(f"*Flesch Reading Ease*: **{readability_ease}** - ***{ease_description}***" if readability_ease else "**Flesch Reading Ease**: N/A")
@@ -287,26 +300,67 @@ def main():
             #st.markdown("---")
 
             # Extract keywords from blog content
-            # extracted_keywords = extract_keywords_from_content(content)
-            # st.subheader("Extracted Keywords from Blog Content")
-            # st.write(", ".join(extracted_keywords))
-            # st.markdown("\n".join([f"- {keyword}" for keyword in enumerate(extracted_keywords)]))
+            extracted_keywords = extract_keywords_from_content(content)
+            st.subheader("Extracted Keywords from Blog Content")
+            if extracted_keywords:
+              #st.write(", ".join(extracted_keywords))
+              st.markdown("\n".join([f"{i+1}. {keyword}" for i, keyword in enumerate(extracted_keywords)]))
+            else:
+              st.warning("No keywords found.")
 
             # Optimize SEO using extracted keywords
             st.subheader("Keyword Optimization Analysis:")
             seo_suggestions = optimize_seo_keywords(content, title, meta_description, blog_url)
-            st.markdown("\n".join([f"{i+1}. {suggestion}" for i, suggestion in enumerate(seo_suggestions) if suggestion.strip()]))
+            if seo_suggestions:
+              st.markdown("\n".join([f"{i+1}. {suggestion}" for i, suggestion in enumerate(seo_suggestions)]))
+              #st.markdown("\n".join([f"- {suggestion}" for suggestion in enumerate(seo_suggestions)]))
+            else:
+                st.write("No SEO keyword optimization suggestions available.")
 
             # Evaluate the content quality
             st.subheader("Content Evaluation Analysis:")
-            content_suggestion = evaluate_content_quality(content)
-            st.markdown("\n".join([f"{i+1}. {suggestion}" for i, suggestion in enumerate(content_suggestion) if suggestion.strip()]))
+            content_quality = evaluate_content_quality(content)
+            if content_quality:
+                st.markdown("\n".join([f"{i+1}. {evaluation}" for i, evaluation in enumerate(content_quality) if evaluation.strip()]))
+            else:
+                st.write("No content quality evaluation available.")
 
             #Evaluate the link quality
-            st.subheader("Link Quality Analysis:")
-            link_content = " ".join([str(link) for link in internal_links + external_links])  # Combine all links content
-            link_suggestion = evaluate_link_quality(link_content)
-            st.markdown("\n".join([f"{i+1}. {suggestion}" for i, suggestion in enumerate(link_suggestion) if suggestion.strip()]))   
+        try:
+            # Extract links from the blog
+            internal_links, external_links = extract_links(blog_url)
+
+            st.subheader("Link Quality Analysis")
+
+            # Consolidate internal links and format as HTML
+            unique_internal_links = list(set(internal_links))
+            internal_links_formatted = [f'<a href="{link}" target="_blank">{link}</a>' for link in unique_internal_links]
+
+            # Consolidate external links and format as HTML
+            unique_external_links = list(set(external_links))
+            external_links_formatted = [f'<a href="{link}" target="_blank">{link}</a>' for link in unique_external_links]
+
+            # Create a DataFrame for the table
+            data = {
+                "Category": ["Internal Links", "External Links"],
+                "Links": [", ".join(internal_links_formatted), ", ".join(external_links_formatted)],
+                "Count": [len(unique_internal_links), len(unique_external_links)],
+            }
+            df = pd.DataFrame(data)
+
+            # Display table
+            st.markdown("### Link Analysis Table")
+            st.write(df.to_html(escape=False, index=False), unsafe_allow_html=True)
+
+            # Evaluate link quality
+            link_content = " ".join(internal_links + external_links)
+            evaluation = evaluate_link_quality(link_content, unique_internal_links, unique_external_links)
+
+            # Display evaluation
+            st.markdown("### Link Quality Evaluation")
+            st.markdown (evaluation)
+        except Exception as e:
+            st.error(f"Error analyzing the blog: {e}") 
 
 if __name__ == "__main__":
     main()
