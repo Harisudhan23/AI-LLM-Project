@@ -71,9 +71,9 @@ def describe_readability(kincaid_grade, reading_ease):
         grade_description = "Easy to read, suitable for younger audiences."
     elif 6 <= kincaid_grade <= 8:
         grade_description = "Suitable for a general audience."
-    elif 9 <= kincaid_grade <= 12:
+    elif 9 <= kincaid_grade <= 11:
         grade_description = "High school comprehension."
-    elif 13 <= kincaid_grade <= 15:
+    elif 12 <= kincaid_grade <= 15:
         grade_description = "College-level comprehension."    
     else:
         grade_description = "Complex content, typically for academic or expert-level readers."
@@ -92,7 +92,7 @@ def describe_readability(kincaid_grade, reading_ease):
     return grade_description, ease_description        
 
 #Extract Keywords
-def extract_keywords_from_content(content, top_n=10):
+def extract_keywords_from_content(content, top_n=20):
     """Extracts keywords from blog content using NLP."""
     try:
         doc = nlp(content)
@@ -249,18 +249,19 @@ Page Content:
 {content}
 
 Link Quality Guidelines:
-    Internal Links: Confirm if your page contains internal links. Provide a clear statement about the presence or absence of internal links.List all internal links present in the content.
+    Internal Links: Confirm if your page contains internal links. Provide a clear statement about the presence or absence of internal links.
     Descriptive Anchor Text: Evaluate whether the internal links are using descriptive and relevant anchor text that clearly indicates the target content.
     Internal Link Optimization: Assess if the internal links are optimized based on first link priority (i.e., ensuring that the most important links appear first).
     Breadcrumbs: Verify whether the page includes breadcrumbs to improve navigation and user experience.
     Usefulness of Internal Links: Evaluate if the internal links are genuinely useful to the reader, leading to relevant and valuable content.
     Preferred URLs for Internal Links: Check whether all internal links are using the preferred URLs (i.e., ensuring consistency in linking to canonical versions).
-    External Links: Confirm if your page includes external links to relevant sources, partners, or content. List all external links present in the content.
+    External Links: Confirm if your page includes external links to relevant sources, partners, or content.
     Affiliate and Sponsored Links: Verify that all affiliate, sponsored, or paid external links use the “NoFollow” tag to comply with SEO best practices.
     External Links Opening in New Window: Evaluate whether all external links are set to open in a new window, ensuring users are not navigated away from the page.
     Broken Links: Confirm if there are any broken links (either internal or external) on the page and specify whether they exist.
 
-The evaluation should deliver a professional, high-quality response that adheres to these standards.        """
+The evaluation should deliver a professional, high-quality response that adheres to these standards.        
+        """
         )
 
         response = (prompt | llm).invoke({
@@ -275,6 +276,7 @@ The evaluation should deliver a professional, high-quality response that adheres
         st.error(f"Error evaluating content quality: {e}")
         log_error("Error in evaluate_content_quality", e)
         return []
+
 
 # Streamlit App
 def main():
@@ -294,8 +296,27 @@ def main():
             grade_description, ease_description = describe_readability(readability_grade, readability_ease)
 
             st.subheader("Readability Scores")
-            st.markdown(f"*Flesch-Kincaid Grade Level*: **{readability_grade}** -***{grade_description}***" if readability_grade else "**Flesch-Kincaid Grade Level**: N/A")
-            st.markdown(f"*Flesch Reading Ease*: **{readability_ease}** - ***{ease_description}***" if readability_ease else "**Flesch Reading Ease**: N/A")
+            if readability_grade:
+               st.markdown(
+                   f"""
+                   <div style="font-size:22px; font-weight:bold;">Flesch-Kincaid Grade Level</div>
+                   <div style="font-size:16px; color:gray;">{readability_grade} - {grade_description}</div>
+                   """,
+                   unsafe_allow_html=True,
+                )
+            else:
+                st.markdown("**Flesch-Kincaid Grade Level**: N/A")
+
+            if readability_ease:
+                st.markdown(
+                    f"""
+                    <div style="font-size:24px; font-weight:bold;">Flesch Reading Ease</div>
+                    <div style="font-size:18px; color:gray;">{readability_ease} - {ease_description}</div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown("**Flesch Reading Ease**: N/A")
  
             #st.markdown("---")
 
@@ -312,7 +333,11 @@ def main():
             st.subheader("Keyword Optimization Analysis:")
             seo_suggestions = optimize_seo_keywords(content, title, meta_description, blog_url)
             if seo_suggestions:
-              st.markdown("\n".join([f"{i+1}. {suggestion}" for i, suggestion in enumerate(seo_suggestions)]))
+              valid_suggestions = [suggestion.strip() for suggestion in seo_suggestions if suggestion.strip()]
+              if valid_suggestions:
+                 st.markdown("\n".join([f" {suggestion}" for suggestion in (valid_suggestions) if suggestion.strip()]))
+              else:
+                 st.write("No valid SEO keyword optimization suggestions available.")
               #st.markdown("\n".join([f"- {suggestion}" for suggestion in enumerate(seo_suggestions)]))
             else:
                 st.write("No SEO keyword optimization suggestions available.")
@@ -354,13 +379,18 @@ def main():
 
             # Evaluate link quality
             link_content = " ".join(internal_links + external_links)
-            evaluation = evaluate_link_quality(link_content, unique_internal_links, unique_external_links)
+            evaluation_link = evaluate_link_quality(link_content, unique_internal_links, unique_external_links)
 
-            # Display evaluation
-            st.markdown("### Link Quality Evaluation")
-            st.markdown (evaluation)
+            if evaluation_link:
+               valid_evaluations = [evaluation.strip() for evaluation in evaluation_link if evaluation.strip()]
+               if valid_evaluations:
+                 st.markdown("### Link Quality Evaluation")
+                 st.markdown("\n".join([f"{i+1}. {evaluation}" for i, evaluation in enumerate(valid_evaluations) if evaluation.strip()]))
+               else:
+                 st.write("No valid link quality evaluations available.") 
         except Exception as e:
             st.error(f"Error analyzing the blog: {e}") 
+
 
 if __name__ == "__main__":
     main()
