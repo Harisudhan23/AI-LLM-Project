@@ -1,7 +1,6 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-import matplotlib.pyplot as plt
 from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
 from langchain.prompts import PromptTemplate
 import spacy
@@ -9,6 +8,7 @@ import logging
 import textstat
 from collections import Counter
 import pandas as pd
+import re  # Added for regex operations
 
 # Constants
 API_KEY = "AIzaSyDdMeUzub03ZnrXfpI-c_kJgT1zOQ-lDP4"  # Replace with your actual API key
@@ -28,15 +28,38 @@ def log_error(message, error):
     """Logs error messages to a file."""
     logging.error(f"{message}: {error}")
 
+# Function to remove zero-width characters
+def remove_zw_chars(text):
+    """Removes zero-width joiner and other related characters."""
+    return re.sub(r"[\u200B-\u200F\u2060-\u206F\uFEFF]", "", text)
+
+
+def print_text_before_llm(text, label="Text Before LLM:"):
+    """Prints the given text with a label. Useful for debugging.
+
+    Args:
+        text (str): The text to print.
+        label (str, optional): A label to identify the printed text. Defaults to "Text Before LLM:".
+    """
+    print("=" * 40)
+    print(f"{label}")
+    print("-" * 40)
+    print(text)
+    print("=" * 40)
+
 #Retrieve blog content
 def retrieve_blog_content(url):
-    """Fetches and parses blog content from a given URL."""
+    """Fetches and parses blog content from a given URL, including headings and list items."""
     try:
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         soup = BeautifulSoup(response.text, 'html.parser')
 
-        content = " ".join([p.text for p in soup.find_all('p')])
+        # Extract text from <p>, <h1>, <h2>, <h3>, and <li> tags
+        elements = soup.find_all(['p', 'h1', 'h2', 'h3', 'li'])
+        content = " ".join([remove_zw_chars(elem.text) for elem in elements])
+
+
         title = soup.title.string.strip() if soup.title else "No title found"
         meta_tag = soup.find("meta", {"name": "description"}) or soup.find("meta", {"property": "og:description"})
         meta_description = meta_tag["content"].strip() if meta_tag else "No meta description found"
@@ -69,9 +92,9 @@ def calculate_readability(content):
 def describe_readability(kincaid_grade, reading_ease):
     if kincaid_grade <= 5:
         grade_description = "Easy to read, suitable for younger audiences."
-    elif 6 <= kincaid_grade <= 8:
+    elif 6 <= kincaid_grade <= 9:
         grade_description = "Suitable for a general audience."
-    elif 9 <= kincaid_grade <= 11:
+    elif 9 <= kincaid_grade <= 12:
         grade_description = "High school comprehension."
     elif 12 <= kincaid_grade <= 15:
         grade_description = "College-level comprehension."    
@@ -95,14 +118,13 @@ def describe_readability(kincaid_grade, reading_ease):
 def extract_keywords_from_content(content, top_n=20):
     """Extracts keywords from blog content using NLP."""
     try:
+         # Print the text before sending to LLM
+        print_text_before_llm(content, "Text Before Keyword Extraction LLM:")
         doc = nlp(content)
-        #keywords = [chunk.text.lower() for chunk in doc.noun_chunks]
-        #keywords = list(set(keywords))  # Remove duplicates
         keywords = [
             chunk.text.lower()
             for chunk in doc.noun_chunks
             if chunk.text.lower() not in nlp.Defaults.stop_words  # Exclude stopwords
-            
         ]
         
         # Count keyword frequencies
@@ -124,7 +146,7 @@ def optimize_seo_keywords(content, page_title, meta_description, url):
             template="""Analyze the following content based on SEO keyword optimization guidelines. Provide a detailed evaluation of how well the content adheres to each guideline without offering suggestions for improvement:
 Each point must be addressed directly, without unnecessary verbosity.
 Maintain a clear sequence, following the order of the guidelines.
-Focus solely on evaluating adherence to the guidelines. Provide clear and actionable analysis for each point.
+Focus solely on evaluating adherence to the guidelines. Provide a clear and actionable analysis for each point.
 
 Content:
 {content}
@@ -147,7 +169,7 @@ SEO Keyword Optimization Guidelines:
     Evaluate whether the title uses the maximum character length without exceeding it, ensuring it is clear and informative.
     Confirm if the page title is wrapped in an H1 tag and follows correct HTML structure.
     Analyze the inclusion of the primary keyword in the meta description. How well is the keyword used, and is the description compelling for users?
-    Evaluate the SEO-friendliness of the URL. Does it include the primary keyword and avoid unnecessary parameters?
+    Determine if the primary keyword is present in the URL. Evaluate if the URL structure is lean and optimized for SEO.
     Assess the placement of the primary keyword in the content, particularly in the first sentence.
     Evaluate the keyword density. Is it balanced and consistent with competitor content?
     Analyze the use of variations of the primary keyword and synonyms (LSI keywords). Are these terms used effectively throughout the content?
@@ -157,6 +179,9 @@ SEO Keyword Optimization Guidelines:
 Based on this analysis, provide a thorough evaluation of how well the content adheres to the above SEO keyword optimization guidelines.
         """
         )
+        
+        # Print the text before sending to LLM
+        print_text_before_llm(f"Content: {content}, Page Title: {page_title}, Meta Description: {meta_description}, URL: {url}", "Text Before SEO Optimization LLM:")
 
         response = (prompt | llm).invoke({
             "content": content,
@@ -166,7 +191,7 @@ Based on this analysis, provide a thorough evaluation of how well the content ad
         })
         
         # Process and return the detailed evaluation as a list
-        return response.content.strip().split("\n")
+        return [remove_zw_chars(line) for line in response.content.strip().split("\n")]
     except Exception as e:
         st.error(f"Error optimizing SEO keywords: {e}")
         log_error("Error in optimize_seo_keywords", e)
@@ -183,7 +208,7 @@ def evaluate_content_quality(content):
  Each guideline title (e.g., "Spelling and Grammar") must be bold in the output for better readability.
  Each point must be addressed directly, without unnecessary verbosity.
  Maintain a clear sequence, following the order of the guidelines.
- Focus solely on evaluating adherence to the guidelines.Provide clear and actionable analysis for each point.
+ Focus solely on evaluating adherence to the guidelines.Provide a clear and actionable analysis for each point.
 
 Blog Content:
 {content}
@@ -203,13 +228,16 @@ Content Quality Guidelines:
 The evaluation should deliver a professional, high-quality response that adheres to these standards.
         """
         )
-
+        
+        # Print the text before sending to LLM
+        print_text_before_llm(content, "Text Before Content Quality LLM:")
+        
         response = (prompt | llm).invoke({
             "content": content,
         })
         
-        # Process and return the detailed evaluation as a list
-        return response.content.strip().split("\n")
+       # Process and return the detailed evaluation as a list
+        return [remove_zw_chars(line) for line in response.content.strip().split("\n")]
     except Exception as e:
         st.error(f"Error evaluating content quality: {e}")
         log_error("Error in evaluate_content_quality", e)
@@ -243,7 +271,7 @@ def evaluate_link_quality(content, internal_links, external_links):
  Each guideline title (e.g., "Internal Links") must be bold in the output for better readability.
  Each point must be addressed directly, without unnecessary verbosity.
  Maintain a clear sequence, following the order of the guidelines.
- Focus solely on evaluating adherence to the guidelines.Provide clear and actionable analysis for each point.
+ Focus solely on evaluating adherence to the guidelines.Provide a clear and actionable analysis for each point.
 
 Page Content:
 {content}
@@ -263,20 +291,22 @@ Link Quality Guidelines:
 The evaluation should deliver a professional, high-quality response that adheres to these standards.        
         """
         )
+        
+         # Print the text before sending to LLM
+        print_text_before_llm(f"Content: {content}, Internal Links: {internal_links}, External Links: {external_links}", "Text Before Link Quality LLM:")
 
         response = (prompt | llm).invoke({
             "content": content,
             "internal_links":", ".join(internal_links) if internal_links else "None found",
             "external_links":", ".join(external_links) if external_links else "None found"
         })
-          
-        # Process and return the detailed evaluation as a list
-        return response.content.strip().split("\n")
+        
+         # Process and return the detailed evaluation as a list
+        return [remove_zw_chars(line) for line in response.content.strip().split("\n")]
     except Exception as e:
         st.error(f"Error evaluating content quality: {e}")
         log_error("Error in evaluate_content_quality", e)
         return []
-
 
 # Streamlit App
 def main():
@@ -317,28 +347,20 @@ def main():
                 )
             else:
                 st.markdown("**Flesch Reading Ease**: N/A")
- 
-            #st.markdown("---")
 
             # Extract keywords from blog content
             extracted_keywords = extract_keywords_from_content(content)
             st.subheader("Extracted Keywords from Blog Content")
             if extracted_keywords:
-              #st.write(", ".join(extracted_keywords))
-              st.markdown("\n".join([f"{i+1}. {keyword}" for i, keyword in enumerate(extracted_keywords)]))
+                st.markdown("\n".join([f"{i+1}. {keyword}" for i, keyword in enumerate(extracted_keywords)]))
             else:
-              st.warning("No keywords found.")
+                st.warning("No keywords found.")
 
             # Optimize SEO using extracted keywords
             st.subheader("Keyword Optimization Analysis:")
             seo_suggestions = optimize_seo_keywords(content, title, meta_description, blog_url)
             if seo_suggestions:
-              valid_suggestions = [suggestion.strip() for suggestion in seo_suggestions if suggestion.strip()]
-              if valid_suggestions:
-                 st.markdown("\n".join([f" {suggestion}" for suggestion in (valid_suggestions) if suggestion.strip()]))
-              else:
-                 st.write("No valid SEO keyword optimization suggestions available.")
-              #st.markdown("\n".join([f"- {suggestion}" for suggestion in enumerate(seo_suggestions)]))
+               st.markdown("\n".join([f" {suggestion}" for suggestion in seo_suggestions]))
             else:
                 st.write("No SEO keyword optimization suggestions available.")
 
@@ -346,7 +368,7 @@ def main():
             st.subheader("Content Evaluation Analysis:")
             content_quality = evaluate_content_quality(content)
             if content_quality:
-                st.markdown("\n".join([f"{i+1}. {evaluation}" for i, evaluation in enumerate(content_quality) if evaluation.strip()]))
+               st.markdown("\n".join([f" {evaluation}" for  evaluation in (content_quality)]))
             else:
                 st.write("No content quality evaluation available.")
 
@@ -382,17 +404,12 @@ def main():
             evaluation_link = evaluate_link_quality(link_content, unique_internal_links, unique_external_links)
 
             if evaluation_link:
-               valid_evaluations = [evaluation.strip() for evaluation in evaluation_link if evaluation.strip()]
-               if valid_evaluations:
-                 st.markdown("### Link Quality Evaluation")
-                 st.markdown("\n".join([f"{i+1}. {evaluation}" for i, evaluation in enumerate(valid_evaluations) if evaluation.strip()]))
-               else:
-                 st.write("No valid link quality evaluations available.") 
+                st.markdown("### Link Quality Evaluation")
+                st.markdown("\n".join([f" {evaluation}" for  evaluation in (evaluation_link)]))
             else:
-                st.write("No Link evaluation available.")     
+                st.write("No Link evaluation available.")
         except Exception as e:
-            st.error(f"Error analyzing the blog: {e}") 
-
+            st.error(f"Error analyzing the blog: {e}")
 
 if __name__ == "__main__":
     main()
