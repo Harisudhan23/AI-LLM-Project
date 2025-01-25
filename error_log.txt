@@ -51,3 +51,4 @@ ERROR:root:Error in evaluate_content_quality: 429 Resource has been exhausted (e
 ERROR:root:Error in optimize_seo_keywords: 429 Resource has been exhausted (e.g. check quota).
 ERROR:root:Error in evaluate_content_quality: 429 Resource has been exhausted (e.g. check quota).
 ERROR:root:Error in evaluate_content_quality: 429 Resource has been exhausted (e.g. check quota).
+ERROR:root:Error in optimize_seo_keywords: "Input to PromptTemplate is missing variables {'analysis_output'}.  Expected: ['analysis_output', 'content', 'meta_description', 'page_title', 'url'] Received: ['content', 'page_title', 'meta_description', 'url']\nNote: if you intended {analysis_output} to be part of the string and not a variable, please escape it with double curly braces like: '{{analysis_output}}'.\nFor troubleshooting, visit: https://python.langchain.com/docs/troubleshooting/errors/INVALID_PROMPT_INPUT "
