@@ -40,6 +40,17 @@ def clean_text(text):
     text = text.replace("â€™", "'")  # Replace "â€™" with an apostrophe
     text = text.replace("Â", "")    #Removes Â characters
     text = text.replace("  ", " ") #Remove Double Spaces
+    text = re.sub(r'[\u200b-\u200f\uFEFF]', '', text)
+
+    # Then remove all whitespace characters, except newlines, and replaces with spaces.
+    text = re.sub(r'[^\S\n]+', ' ', text)
+
+    #Replace new lines with spaces
+    text = re.sub(r'\n', ' ', text)
+
+    # Finally, normalize multiple spaces into single spaces and strip leading/trailing spaces.
+    text = re.sub(r' +', ' ', text).strip()
+
     return text
 
 
@@ -56,22 +67,42 @@ def print_text_before_llm(text, label="Text Before LLM:"):
     print(text)
     print("=" * 40)
 
-
-#Retrieve blog content
-def retrieve_blog_content(url):
-    """Fetches and parses blog content from a given URL, including headings and list items."""
+def scrape_page_content(url):
+    """Scrapes the HTML content of a given URL."""
     try:
         response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        response.encoding = "utf-8" #explicitly set encoding
-        soup = BeautifulSoup(response.text, 'html.parser')
+        response.raise_for_status()  # Raises an exception for bad status codes
+        response.encoding = 'utf-8'
+        soup = BeautifulSoup(response.content, "html.parser")
+        return soup
+    except requests.exceptions.RequestException as e:
+        st.error(f"Error accessing URL: {e}")
+        log_error("Error in scrape_page_content", e)
+        return None
+
+
+#Retrieve blog content
+def retrieve_blog_content(url, soup):
+    """Fetches and parses blog content from a given URL, including headings and list items, while filtering out footers and sidebars."""
+    try:
+        # Example selectors, adjust these based on the specific site
+        main_content_selector = 'article'  #Common selector for main article
+        #Remove sidebars using the "aside" or "sidebar" selectors
+        sidebar_selector = 'aside, div[id*="sidebar"]' #Combined selector
+        #Remove footers using the "footer" selector
+        footer_selector = 'footer' #Footer selector
+
+       #Find and remove the sidebars and footers
+        for element in soup.select(sidebar_selector):
+           element.decompose()
+        for element in soup.select(footer_selector):
+           element.decompose()
 
         # Extract text from <p>, <h1>, <h2>, <h3>, and <li> tags
         elements = soup.find_all(['p', 'h1', 'h2', 'h3', 'li'])
         text_content = " ".join([elem.text for elem in elements])
-
         content = clean_text(text_content) #Clean retrieved text
-
+        content = re.sub(r'Lorem ipsum.*?(\.|。)', '', content, flags=re.IGNORECASE)
         title = soup.title.string.strip() if soup.title else "No title found"
         meta_tag = soup.find("meta", {"name": "description"}) or soup.find("meta", {"property": "og:description"})
         meta_description = meta_tag["content"].strip() if meta_tag else "No meta description found"
@@ -80,13 +111,19 @@ def retrieve_blog_content(url):
             raise ValueError("Blog content is empty or could not be retrieved.")
 
         return content, clean_text(title), clean_text(meta_description)
+
     except requests.exceptions.RequestException as e:
-        st.error(f"Error retrieving blog content: {e}")
-        log_error("RequestException in retrieve_blog_content", e)
+      st.error(f"Error retrieving blog content: {e}")
+      log_error("RequestException in retrieve_blog_content", e)
+      return None, None, None
     except ValueError as e:
-        st.error(f"Content Error: {e}")
-        log_error("ValueError in retrieve_blog_content", e)
-    return None, None, None
+      st.error(f"Content Error: {e}")
+      log_error("ValueError in retrieve_blog_content", e)
+      return None, None, None
+    except Exception as e:
+      st.error(f"Error in retrieve_blog_content: {e}")
+      log_error("Error in retrieve_blog_content", e)
+      return None, None, None
 
 
 #Calculate Readability
@@ -161,74 +198,67 @@ def optimize_seo_keywords(content, page_title, meta_description, url, llm):
             input_variables=["content", "page_title", "meta_description", "url"],
             template="""Analyze the following content based on SEO keyword optimization guidelines. Provide a detailed evaluation of how well the content adheres to each guideline.Focus solely on factual analysis. Do not include any recommendations or suggestions.
 
-    Format the analysis output as follows:
+        Format the analysis output as follows:
 
-    Keyword and Search Intent Alignment: [Your analysis here]
+        Keyword and Search Intent Alignment: [Your analysis here]
 
-    Primary Keyword in Page Title: [Your analysis here]
+        Primary Keyword in Page Title: [Your analysis here]
 
-    Page Title Engagement: [Your analysis here]
+        Page Title Engagement: [Your analysis here]
 
-    Page Title Modifiers: [Your analysis here]
+        Page Title Modifiers: [Your analysis here]
 
-    Page Title Character Length: [Your analysis here]
+        Page Title Character Length: [Your analysis here]
 
-    Page Title HTML Structure: [Your analysis here. If you can't assess, state that]
+        Page Title HTML Structure: [Your analysis here. If you can't assess, state that]
 
-    Primary Keyword in Meta Description: [Your analysis here]
+        Primary Keyword in Meta Description: [Your analysis here]
 
-    Primary Keyword in URL: [Your analysis here]
+        Primary Keyword in URL: [Your analysis here]
 
-    Primary Keyword in First Sentence: [Your analysis here]
+        Primary Keyword in First Sentence: [Your analysis here]
 
-    Keyword Density: [Your analysis here]
+        Keyword Density: [Your analysis here]
 
-    Top 5 Keywords Distribution: [Your analysis here]
+        Top 5 Keywords Distribution: [Your analysis here]
 
-    Variations and LSI Keywords: [Your analysis here]
+        Variations and LSI Keywords: [Your analysis here]
 
-    Readability: [Your analysis here]
+        Content:
+        {content}
 
-    User Experience Factors: [Your analysis here. If you can't assess, state that]
+        Page Title:
+        {page_title}
 
-    Content:
-    {content}
+        Meta Description:
+        {meta_description}
 
-    Page Title:
-    {page_title}
+        URL:
+        {url}
 
-    Meta Description:
-    {meta_description}
-
-    URL:
-    {url}
-
-    SEO Keyword Optimization Guidelines:
-        Evaluate the content's alignment with the target keyword and search intent, ensuring it fits the content and satisfies user expectations.
-        Assess the integration of the primary keyword in the page title and how well it is optimized for search intent.
-        Analyze the effectiveness of the page title in engaging users and its likelihood of attracting clicks in search results.
-        Determine if the page title could benefit from modifiers like "Best," "Top," "Guide," or "2025."
-        Confirm whether the page title utilizes the maximum character length without exceeding it while remaining clear and informative.
-        Verify that the page title is wrapped in an H1 tag and follows correct HTML structure.
-        Evaluate the inclusion and usage of the primary keyword in the meta description and its effectiveness in compelling users.
-        Determine if the primary keyword is present in the URL, and assess whether the URL structure is lean and optimized for SEO.
-        Analyze the placement of the primary keyword in the content, especially in the first sentence.
-        Assess the keyword density, ensuring it is balanced and consistent with competitor content.
-        Ensure that top 5 keywords are distributed across various article sections.
-        Evaluate the use of variations of the primary keyword and synonyms (LSI keywords) throughout the content for effective optimization.
-        Assess the readability of the content, ensuring it is structured for easy reading and digestion by users.
-        Analyze user experience factors, such as mobile-friendliness and load speed, that could impact SEO performance
-
-    The evaluation should deliver a professional, high-quality response that adheres to these standards.
+        SEO Keyword Optimization Guidelines:
+            Evaluate the content's alignment with the target keyword and search intent, ensuring it fits the content and satisfies user expectations.
+            Assess the integration of the primary keyword in the page title and how well it is optimized for search intent.
+            Analyze the effectiveness of the page title in engaging users and its likelihood of attracting clicks in search results.
+            Determine if the page title could benefit from modifiers like "Best," "Top," "Guide," or "2025."
+            Confirm whether the page title utilizes the maximum character length without exceeding it while remaining clear and informative.
+            Verify that the page title is wrapped in an H1 tag and follows correct HTML structure.
+            Evaluate the inclusion and usage of the primary keyword in the meta description and its effectiveness in compelling users.
+            Determine if the primary keyword is present in the URL, and assess whether the URL structure is lean and optimized for SEO.
+            Analyze the placement of the primary keyword in the content, especially in the first sentence.
+            Assess the keyword density, ensuring it is balanced and consistent with competitor content.
+            Ensure that top 5 keywords are distributed across various article sections.
+            Evaluate the use of variations of the primary keyword and synonyms (LSI keywords) throughout the content for effective optimization.
+            
+        The evaluation should deliver a professional, high-quality response that adheres to these standards.
     """
         )
-        
+
         cleaned_content = clean_text(content)
         cleaned_page_title = clean_text(page_title)
         cleaned_meta_description = clean_text(meta_description)
         cleaned_url = clean_text(url)
-
-        # Print the text before sending to LLM
+        # Print the cleaned text before sending to LLM
         print_text_before_llm(f"Content: {cleaned_content}, Page Title: {cleaned_page_title}, Meta Description: {cleaned_meta_description}, URL: {cleaned_url}", "Text Before SEO Optimization LLM:")
 
         response = llm.invoke(prompt.format(
@@ -262,16 +292,16 @@ def evaluate_content_quality(content, llm):
             {content}
 
             Content Quality Guidelines:
-                Spelling and Grammar: Examine the content to check for spacing, spelling and grammatical errors using tools like Grammarly. Clearly state whether any issues were identified.
-                Scannability: Assess the content's readability and formatting. Confirm if headings, bullet points, or other elements make the content easy to scan and consume.
-                Readability: Ensure the content is written at an 8th-grade readability level. Highlight any sentences or sections that are overly complex.
-                Engagement: Evaluate whether the content effectively captures and maintains the reader's attention throughout. Indicate any sections that might lack engagement.
-                Paragraph Structure: Verify that paragraphs are short and structured to avoid dense blocks of text. Mention if any sections deviate from this guideline.
-                Heading Structure: Analyze the logical flow of the headings. Confirm whether they guide the reader effectively through the content.
-                Heading Clarity: Check if the headings are descriptive and accurately reflect the topic of each section.
-                Keyword Usage: Evaluate the use of keyword variations, LSI keywords, or synonyms in the headings and throughout the content. Note the relevance and frequency of their usage.
-                Use of Lists: Verify the use of bullet points and numbered lists where applicable. Confirm whether they enhance clarity and structure.
-                Originality and Relevance: Validate the originality and relevance of the content. State whether it aligns with current trends and provides up-to-date information.
+                **Spelling and Grammar**: Examine the content to check for spacing, spelling and grammatical errors using tools like Grammarly. Clearly state whether any issues were identified.
+                **Scannability**: Assess the content's readability and formatting. Confirm if headings, bullet points, or other elements make the content easy to scan and consume.
+                **Readability**: Ensure the content is written at an 8th-grade readability level. Highlight any sentences or sections that are overly complex.
+                **Engagement**: Evaluate whether the content effectively captures and maintains the reader's attention throughout. Indicate any sections that might lack engagement.
+                **Paragraph Structure**: Verify that paragraphs are short and structured to avoid dense blocks of text. Mention if any sections deviate from this guideline.
+                **Heading Structure**: Analyze the logical flow of the headings. Confirm whether they guide the reader effectively through the content.
+                **Heading Clarity**: Check if the headings are descriptive and accurately reflect the topic of each section.
+                **Keyword Usage**: Evaluate the use of keyword variations, LSI keywords, or synonyms in the headings and throughout the content. Note the relevance and frequency of their usage.
+                **Use of Lists**: Verify the use of bullet points and numbered lists where applicable. Confirm whether they enhance clarity and structure.
+                **Originality and Relevance**: Validate the originality and relevance of the content. State whether it aligns with current trends and provides up-to-date information.
 
             The evaluation should deliver a professional, high-quality response that adheres to these standards.
         """
@@ -326,24 +356,10 @@ Page Content:
 {content}
 """)
 
-def scrape_page_content(url):
-    """Scrapes the HTML content of a given URL."""
-    try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()  # Raises an exception for bad status codes
-        response.encoding = 'utf-8'
-        soup = BeautifulSoup(response.content, "html.parser")
-        text_content = soup.get_text(separator=" ", strip=True)
-        return clean_text(text_content)
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error accessing URL: {e}")
-        log_error("Error in scrape_page_content", e)
-        return None
-
-
-def analyze_url(content, llm):
+def analyze_url(soup, llm):
     """Sends a prompt to the LLM and returns the analysis."""
-    prompt = prompt_template.format(content=clean_text(content))
+    text_content = soup.get_text(separator=" ", strip=True)
+    prompt = prompt_template.format(content=clean_text(text_content))
     response = llm.invoke(prompt)
     return [remove_zw_chars(line) for line in response.content.strip().split("\n")]
 
@@ -369,13 +385,13 @@ def main():
     blog_url = st.text_input("Enter Blog URL:")
     if st.button("Analyze"):
         with st.spinner("Analyzing blog..."):
-            page_content = scrape_page_content(blog_url)
-            if not page_content:
+            soup = scrape_page_content(blog_url)
+            if not soup:
                 st.error("Failed to retrieve page content")
                 return
 
-            # Retrieve blog content
-            content, title, meta_description = retrieve_blog_content(blog_url)
+            # Retrieve blog content, title, meta description
+            content, title, meta_description = retrieve_blog_content(blog_url, soup)
             if not content:
                 return
 
@@ -433,13 +449,12 @@ def main():
             #Evaluate the link quality
             with st.expander("Link Evaluation"):
                 try:
-                    if page_content:
-                       analysis = analyze_url(page_content, llm)
+                    if soup:
+                       analysis = analyze_url(soup ,llm)
                        st.markdown("\n".join([f" {evaluation}" for evaluation in analysis]))
-
-
                 except Exception as e:
                     st.error(f"Error analyzing the blog: {e}")
+
 
 if __name__ == "__main__":
     main()
