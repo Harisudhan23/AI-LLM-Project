@@ -10,6 +10,7 @@ from collections import Counter
 import pandas as pd
 import re  # Added for regex operations
 from urllib.parse import urlparse, urljoin
+import html
 
 # Constants
 API_KEY = "AIzaSyBzSFL43Im7fIv-UGD9WTV4RitWG4VQC0g"  # Replace with your actual API key
@@ -34,38 +35,39 @@ def remove_zw_chars(text):
     """Removes zero-width joiner and other related characters."""
     return re.sub(r"[\u200B-\u200F\u2060-\u206F\uFEFF]", "", text)
 
-def clean_text(text):
-    """Removes common encoding artifacts and extra spaces from text."""
-    text = text.replace("Â ", " ")  # Replace "Â " with a normal space
-    text = text.replace("â€™", "'")  # Replace "â€™" with an apostrophe
-    text = text.replace("Â", "")    #Removes Â characters
-    text = text.replace("  ", " ") #Remove Double Spaces
-    text = re.sub(r'[\u200b-\u200f\uFEFF]', '', text)
+def clean_placeholder_text(content, url=None):
+    """Cleans unwanted placeholder text and special characters from content, preserving contractions."""
+    unwanted_patterns = [
+        r'Lorem ipsum.*?(\.|。)',       # Placeholder text
+        r'Sample content.*?(\.|。)',    # Sample content
+        r'[\u2000-\u206F\uFEFF]',      # Unwanted Unicode whitespace characters
+        r'[^\w\s.,!?\'\-\–/]',          # Non-standard special characters (excluding apostrophe, hyphen and en dash)
+        r'\[.*?\]',                    # Text inside square brackets
+        r'\(.*?\)'                     # Text inside parentheses
+    ]
 
-    # Then remove all whitespace characters, except newlines, and replaces with spaces.
-    text = re.sub(r'[^\S\n]+', ' ', text)
+    url_specific_patterns = {
+        'example.com': [r'Example text.*?(\.|。)', r'Extra placeholder.*?(\.|。)'],
+        'another.com': [r'Special content.*?(\.|。)']
+    }
 
-    #Replace new lines with spaces
-    text = re.sub(r'\n', ' ', text)
+    # Apply general patterns
+    for pattern in unwanted_patterns:
+        content = re.sub(pattern, '', content, flags=re.IGNORECASE)
 
-    # Finally, normalize multiple spaces into single spaces and strip leading/trailing spaces.
-    text = re.sub(r' +', ' ', text).strip()
+    # Apply URL-specific patterns
+    if url and url in url_specific_patterns:
+        for pattern in url_specific_patterns[url]:
+            content = re.sub(pattern, '', content, flags=re.IGNORECASE)
+    
+    # Replace en dash and em dash with hyphen
+    content = content.replace("–", "-")
+    content = content.replace("—", "-")
 
-    return text
+    # Normalize multiple spaces to single spaces (and remove surrounding whitespace)
+    content = re.sub(r'\s+', ' ', content).strip()
 
-
-def print_text_before_llm(text, label="Text Before LLM:"):
-    """Prints the given text with a label. Useful for debugging.
-
-    Args:
-        text (str): The text to print.
-        label (str, optional): A label to identify the printed text. Defaults to "Text Before LLM:".
-    """
-    print("=" * 40)
-    print(f"{label}")
-    print("-" * 40)
-    print(text)
-    print("=" * 40)
+    return content.strip()
 
 def scrape_page_content(url):
     """Scrapes the HTML content of a given URL."""
@@ -79,7 +81,6 @@ def scrape_page_content(url):
         st.error(f"Error accessing URL: {e}")
         log_error("Error in scrape_page_content", e)
         return None
-
 
 #Retrieve blog content
 def retrieve_blog_content(url, soup):
@@ -99,10 +100,9 @@ def retrieve_blog_content(url, soup):
            element.decompose()
 
         # Extract text from <p>, <h1>, <h2>, <h3>, and <li> tags
-        elements = soup.find_all(['p', 'h1', 'h2', 'h3', 'li'])
+        elements = soup.find_all(['p', 'h1', 'h2', 'h3','h4','h5','h6', 'li'])
         text_content = " ".join([elem.text for elem in elements])
-        content = clean_text(text_content) #Clean retrieved text
-        content = re.sub(r'Lorem ipsum.*?(\.|。)', '', content, flags=re.IGNORECASE)
+        content = clean_placeholder_text(text_content, url) #Clean retrieved text
         title = soup.title.string.strip() if soup.title else "No title found"
         meta_tag = soup.find("meta", {"name": "description"}) or soup.find("meta", {"property": "og:description"})
         meta_description = meta_tag["content"].strip() if meta_tag else "No meta description found"
@@ -110,7 +110,7 @@ def retrieve_blog_content(url, soup):
         if not content.strip():
             raise ValueError("Blog content is empty or could not be retrieved.")
 
-        return content, clean_text(title), clean_text(meta_description)
+        return content, clean_placeholder_text(title), clean_placeholder_text(meta_description)
 
     except requests.exceptions.RequestException as e:
       st.error(f"Error retrieving blog content: {e}")
@@ -125,6 +125,18 @@ def retrieve_blog_content(url, soup):
       log_error("Error in retrieve_blog_content", e)
       return None, None, None
 
+def print_text_before_llm(text, label="Text Before LLM:"):
+    """Prints the given text with a label. Useful for debugging.
+
+    Args:
+        text (str): The text to print.
+        label (str, optional): A label to identify the printed text. Defaults to "Text Before LLM:".
+    """
+    print("=" * 40)
+    print(f"{label}")
+    print("-" * 40)
+    print(text)
+    print("=" * 40)
 
 #Calculate Readability
 def calculate_readability(content):
@@ -140,16 +152,27 @@ def calculate_readability(content):
         return None, None
 
 def describe_readability(kincaid_grade, reading_ease):
+    """Describes readability and provides suggestions."""
+    grade_description = ""
+    ease_description = ""
+    grade_suggestion = ""
+    ease_suggestion = ""
+
+
     if kincaid_grade <= 5:
         grade_description = "Easy to read, suitable for younger audiences."
     elif 6 <= kincaid_grade <= 9:
         grade_description = "Suitable for a general audience."
     elif 9 <= kincaid_grade <= 12:
         grade_description = "High school comprehension."
+        grade_suggestion = "Consider simplifying some sentences or using less technical jargon if the target audience is not academic."
     elif 12 <= kincaid_grade <= 15:
         grade_description = "College-level comprehension."
+        grade_suggestion = "Reduce sentence complexity and use simpler vocabulary for a broader readership."
     else:
         grade_description = "Complex content, typically for academic or expert-level readers."
+        grade_suggestion = "Simplify sentences, use common words, and clarify complex topics for a wider audience."
+
 
     if reading_ease >= 80:
         ease_description = "Very easy to read."
@@ -157,20 +180,28 @@ def describe_readability(kincaid_grade, reading_ease):
         ease_description = "Easy to read."
     elif 50 <= reading_ease < 70:
         ease_description = "Fairly easy to read."
+        ease_suggestion = "Consider using shorter sentences and simpler vocabulary to improve reading ease."
     elif 30 <= reading_ease < 50:
         ease_description = "Difficult to read."
+        ease_suggestion = "Use simpler words and shorter sentences, and add headings and subheadings to break up long text blocks."
     else:
         ease_description = "Very difficult to read, often technical or academic."
+        ease_suggestion = "Consider rewriting the content with simpler language, more examples, and better formatting for clarity."
+        
+    # If there are no suggestions set, then change the suggestion to 'No Suggestions'
+    if not grade_suggestion:
+        grade_suggestion = "No Suggestions"
+    if not ease_suggestion:
+        ease_suggestion = "No Suggestions"
 
-    return grade_description, ease_description
-
+    return grade_description, ease_description, grade_suggestion, ease_suggestion
 
 #Extract Keywords
 def extract_keywords_from_content(content, top_n=20):
     """Extracts keywords from blog content using NLP."""
     try:
         # Print the text before sending to LLM
-        cleaned_content = clean_text(content)
+        cleaned_content = clean_placeholder_text(content)
         print_text_before_llm(cleaned_content, "Text Before Keyword Extraction LLM:")
         doc = nlp(cleaned_content)
         keywords = [
@@ -189,40 +220,40 @@ def extract_keywords_from_content(content, top_n=20):
         log_error("Error in extract_top_keywords_from_content", e)
         return []
 
-
 #Optimize Keywords for SEO
 def optimize_seo_keywords(content, page_title, meta_description, url, llm):
     """Optimizes SEO keywords based on structured guidelines."""
     try:
         prompt = PromptTemplate(
             input_variables=["content", "page_title", "meta_description", "url"],
-            template="""Analyze the following content based on SEO keyword optimization guidelines. Provide a detailed evaluation of how well the content adheres to each guideline.Focus solely on factual analysis. Do not include any recommendations or suggestions.
+            template="""Analyze the following content based on SEO keyword optimization guidelines. Provide a detailed evaluation of how well the content adheres to each guideline. In addition, provide suggestions to improve the page in terms of keyword optimization for SEO Performance. Do not include any concluding statements or summaries.
 
-        Format the analysis output as follows:
+        Format the analysis and suggestions as follows, with each output on a separate line:
 
-        Keyword and Search Intent Alignment: [Your analysis here]
+        Keyword and Search Intent Alignment: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
-        Primary Keyword in Page Title: [Your analysis here]
+        Primary Keyword in Page Title: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
-        Page Title Engagement: [Your analysis here]
+        Page Title Engagement: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
-        Page Title Modifiers: [Your analysis here]
+        Page Title Modifiers: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
-        Page Title Character Length: [Your analysis here]
+        Page Title Character Length: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
-        Page Title HTML Structure: [Your analysis here. If you can't assess, state that]
+        Page Title HTML Structure: [Your analysis here. If you can't assess, state that]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
-        Primary Keyword in Meta Description: [Your analysis here]
+        Primary Keyword in Meta Description: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
-        Primary Keyword in URL: [Your analysis here]
+        Primary Keyword in URL: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
-        Primary Keyword in First Sentence: [Your analysis here]
+        Primary Keyword in First Sentence: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
-        Keyword Density: [Your analysis here]
+        Keyword Density: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
-        Top 5 Keywords Distribution: [Your analysis here]
+        Top 5 Keywords Distribution: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
-        Variations and LSI Keywords: [Your analysis here]
+        Variations and LSI Keywords: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+
 
         Content:
         {content}
@@ -240,7 +271,7 @@ def optimize_seo_keywords(content, page_title, meta_description, url, llm):
             Evaluate the content's alignment with the target keyword and search intent, ensuring it fits the content and satisfies user expectations.
             Assess the integration of the primary keyword in the page title and how well it is optimized for search intent.
             Analyze the effectiveness of the page title in engaging users and its likelihood of attracting clicks in search results.
-            Determine if the page title could benefit from modifiers like "Best," "Top," "Guide," or "2025."
+            Assess whether the page title could benefit from the inclusion of a temporal modifier, such as a year (e.g., '2025'), considering its current click-worthiness and character length.
             Confirm whether the page title utilizes the maximum character length without exceeding it while remaining clear and informative.
             Verify that the page title is wrapped in an H1 tag and follows correct HTML structure.
             Evaluate the inclusion and usage of the primary keyword in the meta description and its effectiveness in compelling users.
@@ -254,10 +285,10 @@ def optimize_seo_keywords(content, page_title, meta_description, url, llm):
     """
         )
 
-        cleaned_content = clean_text(content)
-        cleaned_page_title = clean_text(page_title)
-        cleaned_meta_description = clean_text(meta_description)
-        cleaned_url = clean_text(url)
+        cleaned_content = clean_placeholder_text(content, url)
+        cleaned_page_title = clean_placeholder_text(page_title)
+        cleaned_meta_description = clean_placeholder_text(meta_description)
+        cleaned_url = clean_placeholder_text(url)
         # Print the cleaned text before sending to LLM
         print_text_before_llm(f"Content: {cleaned_content}, Page Title: {cleaned_page_title}, Meta Description: {cleaned_meta_description}, URL: {cleaned_url}", "Text Before SEO Optimization LLM:")
 
@@ -268,7 +299,18 @@ def optimize_seo_keywords(content, page_title, meta_description, url, llm):
             url=cleaned_url,
         ))
         # Process and return the detailed evaluation as a list
-        return [remove_zw_chars(line) for line in response.content.strip().split("\n")]
+        processed_response = []
+        for line in response.content.strip().split("\n"):
+          parts = line.split("Suggestions:")
+          if len(parts) == 2:
+            analysis, suggestions = parts
+            if not suggestions.strip():
+                processed_response.append(f"{analysis.strip()} Suggestions: No Suggestions")
+            else:
+              processed_response.append(line)
+          else:
+             processed_response.append(line)
+        return [remove_zw_chars(line) for line in processed_response]
     except Exception as e:
         st.error(f"Error optimizing SEO keywords: {e}")
         log_error("Error in optimize_seo_keywords", e)
@@ -276,17 +318,34 @@ def optimize_seo_keywords(content, page_title, meta_description, url, llm):
 
 #Evaluate Content quality of content
 def evaluate_content_quality(content, llm):
-    """Evaluates content quality based on structured guidelines using an LLM."""
+    """Evaluates content quality based on structured guidelines using an LLM, and also provides suggestions."""
     try:
         prompt = PromptTemplate(
             input_variables=["content"],
-            template="""Analyze the following content based on content quality guidelines. Provide a detailed evaluation of how well the content adheres to each guideline. Focus solely on factual analysis. Do not include any recommendations or suggestions.
+            template="""Analyze the following content based on content quality guidelines. Provide a detailed evaluation of how well the content adheres to each guideline. In addition, provide specific suggestions to improve the content quality and overall user experience for SEO performance.
 
-            Each guideline title (e.g., "Spelling and Grammar") must be bold in the output for better readability.
-            Each point must be addressed directly, without unnecessary verbosity.
-            Maintain a clear sequence, following the order of the guidelines.
-            Focus solely on evaluating adherence to the guidelines. Provide a clear and actionable analysis for each point.
-            When providing your analysis of the "Spelling and Grammar" guideline, make note if there is awkward phrasing, extra spaces between words or periods, or other spacing errors.
+            Format the analysis and suggestions as follows:
+
+            Spelling and Grammar: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+
+            Scannability: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+
+            Readability: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+
+            Engagement: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+
+            Paragraph Structure: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+
+            Heading Structure: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+
+            Heading Clarity: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+
+            Keyword Usage: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+
+            Use of Lists: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+
+            Originality and Relevance: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+
 
             Blog Content:
             {content}
@@ -308,49 +367,62 @@ def evaluate_content_quality(content, llm):
         )
 
         # Clean the text *before* printing and sending to LLM
-        cleaned_content = clean_text(content)
+        cleaned_content = clean_placeholder_text(content)
         print_text_before_llm(cleaned_content, "Text Before Content Quality LLM:")
 
         response = llm.invoke(prompt.format(content = cleaned_content))
        # Process and return the detailed evaluation as a list
-        return [remove_zw_chars(line) for line in response.content.strip().split("\n")]
+        processed_response = []
+        for line in response.content.strip().split("\n"):
+           parts = line.split("Suggestions:")
+           if len(parts) == 2:
+               analysis, suggestions = parts
+               if not suggestions.strip():
+                   processed_response.append(f"{analysis.strip()} Suggestions: No Suggestions")
+               else:
+                   processed_response.append(line)
+           else:
+               processed_response.append(line)
+        return [remove_zw_chars(line) for line in processed_response]
     except Exception as e:
         st.error(f"Error evaluating content quality: {e}")
         log_error("Error in evaluate_content_quality", e)
         return []
 
 prompt_template = PromptTemplate.from_template("""
-Analyze the following page content and evaluate its link structure according to the guidelines provided. Provide your response in the strict format specified below.
+Analyze the following page content and evaluate its link structure according to the guidelines provided. Provide a detailed evaluation of how well the content adheres to each guideline. In addition, provide suggestions to improve the link structure for SEO performance.
+
+Format the analysis and suggestions as follows:
 
 **Internal Links**
-*   [Analysis of internal links - is it present or not]
+*   [Analysis of internal links - is it present or not]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
 **Descriptive Anchor Text**
-*   [Analysis of descriptive anchor text for internal links]
+*   [Analysis of descriptive anchor text for internal links]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
 **Internal Link Optimization**
-*  [Analysis of internal link prioritization, are important links first]
+*  [Analysis of internal link prioritization, are important links first]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
 **Breadcrumbs**
-*   [Analysis of the presence or absence of breadcrumbs]
+*   [Analysis of the presence or absence of breadcrumbs]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
 **Usefulness of Internal Links**
-*  [Analysis of the usefulness of internal links]
+*  [Analysis of the usefulness of internal links]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
 **Preferred URLs for Internal Links**
-*   [Analyze the page content. Are all internal links using the preferred URLs (i.e., ensuring consistency in linking to canonical versions) Answer, stating if it can be determined from provided content or not and your analysis]
+*   [Analyze the page content. Are all internal links using the preferred URLs (i.e., ensuring consistency in linking to canonical versions) Answer, stating if it can be determined from provided content or not and your analysis]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
 **External Links**
-*   [Analyze the page content. Determine if the page *likely* includes external links to relevant sources, partners, or content. Base your answer on what is likely given the context. Provide an analysis, including if it is highly likely or not and why.]
+*   [Analyze the page content. Determine if the page *likely* includes external links to relevant sources, partners, or content. Base your answer on what is likely given the context. Provide an analysis, including if it is highly likely or not and why.]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
 **Affiliate and Sponsored Links**
-*   [Analyze the page content. Determine if all affiliate, sponsored, or paid external links are *likely* using the “NoFollow” tag to comply with SEO best practices. Based on the context, determine how likely it is that these exist and infer if they are likely to be 'no follow'. State if this is based on an inference from the provided content or if it is something that can not be determined.]
+*   [Analyze the page content. Determine if all affiliate, sponsored, or paid external links are *likely* using the “NoFollow” tag to comply with SEO best practices. Based on the context, determine how likely it is that these exist and infer if they are likely to be 'no follow'. State if this is based on an inference from the provided content or if it is something that can not be determined.]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
 **External Links Opening in New Window**
-*   [Analyze the page content. Determine if, based on best practices, the external links are *likely* set to open in a new window. State if this is based on an inference or if it cannot be determined from content provided.]
+*   [Analyze the page content. Determine if, based on best practices, the external links are *likely* set to open in a new window. State if this is based on an inference or if it cannot be determined from content provided.]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
 **Broken Links**
-*   [Analyze the page content. Based on the page content, infer if there might be any broken links (either internal or external) on the page. Provide analysis and explain, and if this is not something that is possible to ascertain from the content, say that.]
+*   [Analyze the page content. Based on the page content, infer if there might be any broken links (either internal or external) on the page. Provide analysis and explain, and if this is not something that is possible to ascertain from the content, say that.]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
 Page Content:
 {content}
@@ -359,9 +431,28 @@ Page Content:
 def analyze_url(soup, llm):
     """Sends a prompt to the LLM and returns the analysis."""
     text_content = soup.get_text(separator=" ", strip=True)
-    prompt = prompt_template.format(content=clean_text(text_content))
+    prompt = prompt_template.format(content=clean_placeholder_text(text_content))
     response = llm.invoke(prompt)
-    return [remove_zw_chars(line) for line in response.content.strip().split("\n")]
+    
+    processed_response = []
+    for line in response.content.strip().split("\n"):
+        if ": " in line: # Check for both colon and space
+            parts = line.split(": ", 1)  # Split at the first occurrence of ": "
+            if len(parts) == 2:
+                label, text = parts
+                if "Suggestions" in label:
+                   if not text.strip():
+                     processed_response.append(f"{label.strip()}: No Suggestions")
+                   else:
+                     processed_response.append(f"{label.strip()}: {text.strip()}")
+                else:
+                     processed_response.append(f"{label.strip()}: {text.strip()}")
+            else:
+              processed_response.append(line)
+        else:
+            processed_response.append(line)
+
+    return [remove_zw_chars(line) for line in processed_response]
 
 
 # Streamlit App
@@ -396,30 +487,34 @@ def main():
                 return
 
             readability_grade, readability_ease = calculate_readability(content)
-            grade_description, ease_description = describe_readability(readability_grade, readability_ease)
+            grade_description, ease_description, grade_suggestion, ease_suggestion  = describe_readability(readability_grade, readability_ease)
 
             with st.expander("Readability Scores"):
-                if readability_grade:
-                    st.markdown(
-                        f"""
-                        <div style="font-size:22px; font-weight:bold;">Flesch-Kincaid Grade Level</div>
-                        <div style="font-size:16px; color:gray;">{readability_grade} - {grade_description}</div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    st.markdown("**Flesch-Kincaid Grade Level**: N/A")
+              if readability_grade:
+                st.markdown(
+                  f"""
+                  <div style="font-size:22px; font-weight:bold;">Flesch-Kincaid Grade Level</div>
+                  <div style="font-size:16px; color:gray;">{readability_grade} - {grade_description}</div>
+                  """,
+                  unsafe_allow_html=True,
+                )
+                if grade_suggestion:
+                  st.markdown(f"<div style='font-size:14px; color:red;'>Suggestion: {grade_suggestion}</div>", unsafe_allow_html=True)
+              else:
+               st.markdown("**Flesch-Kincaid Grade Level**: N/A")
 
-                if readability_ease:
-                    st.markdown(
-                        f"""
-                        <div style="font-size:22px; font-weight:bold;">Flesch Reading Ease</div>
-                        <div style="font-size:16px; color:gray;">{readability_ease} - {ease_description}</div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-                else:
-                     st.markdown("**Flesch Reading Ease**: N/A")
+              if readability_ease:
+                st.markdown(
+                  f"""
+                  <div style="font-size:22px; font-weight:bold;">Flesch Reading Ease</div>
+                  <div style="font-size:16px; color:gray;">{readability_ease} - {ease_description}</div>
+                  """,
+                  unsafe_allow_html=True,
+                )
+                if ease_suggestion:
+                  st.markdown(f"<div style='font-size:14px; color:red;'>Suggestion: {ease_suggestion}</div>", unsafe_allow_html=True)
+              else:
+                st.markdown("**Flesch Reading Ease**: N/A")
 
             # Extract keywords from blog content
             extracted_keywords = extract_keywords_from_content(content)
@@ -429,32 +524,66 @@ def main():
                 else:
                    st.warning("No keywords found.")
 
-
             # Optimize SEO using extracted keywords
             with st.expander("Keyword Optimization Analysis"):
-                seo_suggestions = optimize_seo_keywords(content, title, meta_description, blog_url, llm)
-                if seo_suggestions:
-                    st.markdown("\n".join([f" {suggestion}" for suggestion in seo_suggestions]))
-                else:
-                    st.write("No SEO keyword optimization suggestions available.")
+               seo_suggestions = optimize_seo_keywords(content, title, meta_description, blog_url, llm)
+               if seo_suggestions:
+                  for suggestion in seo_suggestions:
+                    parts = suggestion.split("Suggestions:")
+                    if len(parts) == 2:
+                        analysis, suggestions = parts
+                        st.markdown(f"<div style='font-size:16px; font-weight:bold;'>Analysis:</div><div style='font-size:14px;'>{analysis.strip()}</div>", unsafe_allow_html=True)
+                        st.markdown(f"<div style='font-size:16px; font-weight:bold; color:red;'>Suggestions:</div><div style='font-size:14px; color:red;'>{suggestions.strip()}</div>", unsafe_allow_html=True)
+                    else:
+                       st.markdown(f" {suggestion}")
+               else:
+                st.write("No SEO keyword optimization suggestions available.")
 
             # Evaluate the content quality
             with st.expander("Content Evaluation Analysis"):
-                content_quality = evaluate_content_quality(content, llm)
-                if content_quality:
-                    st.markdown("\n".join([f" {evaluation}" for evaluation in content_quality]))
-                else:
-                   st.write("No content quality evaluation available.")
-
+              content_quality = evaluate_content_quality(content, llm)
+              if content_quality:
+                for evaluation in content_quality:
+                  parts = evaluation.split("Suggestions:")
+                  if len(parts) == 2:
+                    analysis, suggestions = parts
+                    st.markdown(f"<div style='font-size:16px; font-weight:bold;'>Analysis:</div><div style='font-size:14px;'>{analysis.strip()}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div style='font-size:16px; font-weight:bold; color:red;'>Suggestions:</div><div style='font-size:14px; color:red;'>{suggestions.strip()}</div>", unsafe_allow_html=True)
+                  else:
+                     if ": " in evaluation:
+                        parts = evaluation.split(": ", 1)
+                        if len(parts) == 2:
+                          label, text = parts
+                          st.markdown(f"<div style='font-size:16px; font-weight:bold;'>{label}:</div><div style='font-size:14px;'>{text}</div>", unsafe_allow_html=True)
+                        else:
+                          st.markdown(f" {evaluation}")
+                     else:
+                        st.markdown(f" {evaluation}")
+              else:
+               st.write("No content quality evaluation available.")
             #Evaluate the link quality
             with st.expander("Link Evaluation"):
                 try:
                     if soup:
-                       analysis = analyze_url(soup ,llm)
-                       st.markdown("\n".join([f" {evaluation}" for evaluation in analysis]))
+                      analysis = analyze_url(soup ,llm)
+                      for evaluation in analysis:
+                        parts = evaluation.split("Suggestions:")
+                        if len(parts) == 2:
+                            analysis, suggestions = parts
+                            st.markdown(f"<div style='font-size:16px; font-weight:bold;'>Analysis:</div><div style='font-size:14px;'>{analysis.strip()}</div>", unsafe_allow_html=True)
+                            st.markdown(f"<div style='font-size:16px; font-weight:bold; color:red;'>Suggestions:</div><div style='font-size:14px; color:red;'>{suggestions.strip()}</div>", unsafe_allow_html=True)
+                        else:
+                          if ": " in evaluation:
+                            parts = evaluation.split(": ", 1)
+                            if len(parts) == 2:
+                              label, text = parts
+                              st.markdown(f"<div style='font-size:16px; font-weight:bold;'>{label}:</div><div style='font-size:14px;'>{text}</div>", unsafe_allow_html=True)
+                            else:
+                              st.markdown(f" {evaluation}")
+                          else:
+                              st.markdown(f" {evaluation}")
                 except Exception as e:
                     st.error(f"Error analyzing the blog: {e}")
-
 
 if __name__ == "__main__":
     main()

@@ -1,398 +1,413 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
-import matplotlib.pyplot as plt
-from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
+import json
+from urllib.parse import urljoin
 from langchain.prompts import PromptTemplate
-import spacy
+from langchain_google_genai.chat_models import ChatGoogleGenerativeAI
+import re
 import logging
-import textstat
+import os
+import nltk
 from collections import Counter
-import pandas as pd
+from nltk.corpus import stopwords
+from nltk.tokenize import word_tokenize
+from nltk.sentiment import SentimentIntensityAnalyzer
 
-# Constants
-API_KEY = "AIzaSyDdMeUzub03ZnrXfpI-c_kJgT1zOQ-lDP4"  # Replace with your actual API key
+nltk.download('punkt')
+nltk.download('stopwords')
+nltk.download('vader_lexicon')
+
+API_KEY = "AIzaSyBzSFL43Im7fIv-UGD9WTV4RitWG4VQC0g"  # Replace with your actual API key
 LLM_MODEL = "gemini-2.0-flash-exp"
 
 # Initialize LLM
 llm = ChatGoogleGenerativeAI(api_key=API_KEY, model=LLM_MODEL)
-
-# Load Spacy NLP model
-nlp = spacy.load("en_core_web_sm")
-
 # Configure logging
-logging.basicConfig(level=logging.ERROR, filename="error_log.txt")
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 
-# Utility Functions
-def log_error(message, error):
-    """Logs error messages to a file."""
-    logging.error(f"{message}: {error}")
-
-#Retrieve blog content
-def retrieve_blog_content(url):
-    """Fetches and parses blog content from a given URL."""
-    try:
-        response = requests.get(url, timeout=10)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, 'html.parser')
-
-        content = " ".join([p.text for p in soup.find_all('p')])
-        title = soup.title.string.strip() if soup.title else "No title found"
-        meta_tag = soup.find("meta", {"name": "description"}) or soup.find("meta", {"property": "og:description"})
-        meta_description = meta_tag["content"].strip() if meta_tag else "No meta description found"
-
-        if not content.strip():
-            raise ValueError("Blog content is empty or could not be retrieved.")
-
-        return content, title, meta_description
-    except requests.exceptions.RequestException as e:
-        st.error(f"Error retrieving blog content: {e}")
-        log_error("RequestException in retrieve_blog_content", e)
-    except ValueError as e:
-        st.error(f"Content Error: {e}")
-        log_error("ValueError in retrieve_blog_content", e)
-    return None, None, None
-
-#Calculate Readability
-def calculate_readability(content):
-    """Calculates Flesch-Kincaid grade and reading ease for content."""
-    try:
-        if not content or not content.strip():
-            return None, None
-        kincaid_grade = textstat.flesch_kincaid_grade(content)
-        reading_ease = textstat.flesch_reading_ease(content)
-        return kincaid_grade, reading_ease
-    except Exception as e:
-        log_error("Error in calculate_readability", e)
-        return None, None
-
-def describe_readability(kincaid_grade, reading_ease):
-    if kincaid_grade <= 5:
-        grade_description = "Easy to read, suitable for younger audiences."
-    elif 6 <= kincaid_grade <= 8:
-        grade_description = "Suitable for a general audience."
-    elif 9 <= kincaid_grade <= 11:
-        grade_description = "High school comprehension."
-    elif 12 <= kincaid_grade <= 15:
-        grade_description = "College-level comprehension."    
-    else:
-        grade_description = "Complex content, typically for academic or expert-level readers."
+try:
+    logging.basicConfig(
+        level=LOG_LEVEL,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler()]
+    )
     
-    if reading_ease >= 80:
-        ease_description = "Very easy to read."
-    elif 70 <= reading_ease < 80:
-        ease_description = "Easy to read."    
-    elif 50 <= reading_ease < 70:
-        ease_description = "Fairly easy to read."
-    elif 30 <= reading_ease < 50:
-        ease_description = "Difficult to read."
-    else:
-        ease_description = "Very difficult to read, often technical or academic."
+    logger = logging.getLogger(__name__)
+    logger.setLevel(LOG_LEVEL)
 
-    return grade_description, ease_description        
+except ValueError:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler()]
+    )
+    logger = logging.getLogger(__name__)
+    logger.error(f"Invalid log level provided using default value: 'INFO'")
 
-#Extract Keywords
-def extract_keywords_from_content(content, top_n=20):
-    """Extracts keywords from blog content using NLP."""
+
+
+def clean_text(text):
+    """Cleans up text by removing extra spaces, newlines and HTML tags."""
+    if not text:
+        return ""
+    text = re.sub(r'<.*?>', '', text)
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+
+def scrape_page_content(url):
+    """
+    Scrapes the content of a webpage, returning a BeautifulSoup object.
+    """
+    logger.info(f"Starting scraping process for URL: {url}")
     try:
-        doc = nlp(content)
-        #keywords = [chunk.text.lower() for chunk in doc.noun_chunks]
-        #keywords = list(set(keywords))  # Remove duplicates
-        keywords = [
-            chunk.text.lower()
-            for chunk in doc.noun_chunks
-            if chunk.text.lower() not in nlp.Defaults.stop_words  # Exclude stopwords
-            
-        ]
-        
-        # Count keyword frequencies
-        keyword_counts = Counter(keywords)
-        
-        # Get the top N keywords based on frequency
-        top_keywords = [keyword for keyword, _ in keyword_counts.most_common(top_n)]
-        return top_keywords
-    except Exception as e:
-        log_error("Error in extract_top_keywords_from_content", e)
-        return []
+        response = requests.get(url)
+        response.raise_for_status()  # Raise an exception for bad status codes
+        soup = BeautifulSoup(response.content, 'html.parser')
+        logger.info(f"Scraping process completed successfully for URL: {url}")
+        return soup
+    except requests.exceptions.RequestException as e:
+         logger.error(f"Error fetching the URL: {e}")
+         st.error(f"Error fetching the URL: {e}")
+         return None
 
-#Optimize Keywords for SEO
-def optimize_seo_keywords(content, page_title, meta_description, url):
+
+def retrieve_blog_content(url, soup):
+    """
+    Extracts blog content, title, and meta description from BeautifulSoup object.
+    """
+    logger.info(f"Starting retrieval of blog content for URL: {url}")
+    try:
+        data = {
+            "title": "",
+            "content": "",
+            "meta_description": ""
+        }
+        
+        title_element = soup.find('h1')
+        if title_element:
+           data["title"] = title_element.text.strip()
+        
+        
+        meta_desc = soup.find('meta', attrs={'name': 'description'})
+        if meta_desc:
+           data["meta_description"] = meta_desc.get('content')
+           
+        cleaned_content = ""
+        content_elements = soup.find_all(['h2', 'h3', 'p', 'ul','img','a', 'div'])
+        for element in content_elements:
+            if element.name == 'p':
+                cleaned_content +=  " " + clean_text(element.get_text(strip=True))
+            elif element.name == 'h2' or element.name == 'h3':
+                cleaned_content += " " + clean_text(element.get_text(strip=True))
+            elif element.name == 'ul':
+                 list_items = [li.get_text(strip=True) for li in element.find_all('li')]
+                 cleaned_content += " " + " ".join(list_items)
+            elif element.name == 'div' and "feature-check" in element.get('class',[]):
+                check_elements = element.find_all('p')
+                if check_elements:
+                    cleaned_content += " " + " ".join([ check.get_text(strip=True) for check in check_elements ])
+        
+        data["content"] = cleaned_content
+        logger.info(f"Retrieval of blog content completed successfully for URL: {url}")
+        return data["content"], data["title"], data["meta_description"]
+
+    except Exception as e:
+        logger.error(f"Error in retrieving blog content for URL: {url} error is {e}")
+        st.error(f"An error occurred: {e}")
+        return None, None, None
+
+
+def calculate_readability(content):
+    """
+     Calculates the Flesch-Kincaid Grade Level and Flesch Reading Ease scores.
+    """
+    logger.info(f"Calculating readability scores")
+    try:
+        if not content:
+            logger.warning(f"No content available to calculate readability")
+            return None, None
+    
+        sentences = nltk.sent_tokenize(content)
+        words = nltk.word_tokenize(content)
+    
+        if not sentences or not words:
+            logger.warning(f"Could not process sentences and words of content")
+            return None, None
+        
+        num_sentences = len(sentences)
+        num_words = len(words)
+
+        syllables = 0
+        for word in words:
+           for char in word:
+                if char.lower() in "aeiou":
+                    syllables += 1
+            
+        if num_sentences == 0 or num_words == 0:
+            logger.warning("Number of sentences or words is 0")
+            return None, None
+        
+        flesch_reading_ease = 206.835 - 1.015 * (num_words / num_sentences) - 84.6 * (syllables / num_words)
+        flesch_kincaid_grade = 0.39 * (num_words / num_sentences) + 11.8 * (syllables / num_words) - 15.59
+
+        logger.info(f"Readability scores calculation completed successfully")
+        return round(flesch_kincaid_grade, 2) , round(flesch_reading_ease, 2)
+    
+    except Exception as e:
+        logger.error(f"An error occurred while calculating readability: {e}")
+        return None, None
+    
+    
+def describe_readability(readability_grade, readability_ease):
+    """Provides descriptions of readability scores."""
+    logger.info(f"Providing description of the readability scores")
+    if readability_grade is None:
+        grade_description = "N/A"
+    elif readability_grade < 7:
+      grade_description = "Very easy to read"
+    elif readability_grade < 10:
+        grade_description = "Easy to read"
+    elif readability_grade < 13:
+        grade_description = "Normal to read"
+    elif readability_grade < 16:
+        grade_description = "Difficult to read"
+    else:
+        grade_description = "Very difficult to read"
+
+    if readability_ease is None:
+        ease_description = "N/A"
+    elif readability_ease > 80:
+        ease_description = "Very Easy"
+    elif readability_ease > 70:
+        ease_description = "Easy"
+    elif readability_ease > 60:
+        ease_description = "Standard"
+    elif readability_ease > 50:
+        ease_description = "Fairly Difficult"
+    else:
+      ease_description = "Difficult"
+    
+    logger.info(f"Descriptions provided successfully")
+    return grade_description, ease_description
+    
+
+def extract_keywords_from_content(content, top_n=10):
+    """Extracts top keywords from content using NLTK."""
+    logger.info(f"Extracting keywords from content")
+    try:
+        if not content:
+            logger.warning(f"No content available to extract keywords from")
+            return None
+        stop_words = set(stopwords.words('english'))
+        words = word_tokenize(content)
+        words = [word.lower() for word in words if word.isalpha()]
+        filtered_words = [word for word in words if word not in stop_words]
+
+        word_counts = Counter(filtered_words)
+        most_common_words = [word for word, count in word_counts.most_common(top_n)]
+        logger.info(f"Keywords extracted successfully from content")
+        return most_common_words
+    
+    except Exception as e:
+        logger.error(f"Error during keyword extraction from content: {e}")
+        return None
+    
+
+def optimize_seo_keywords(content, page_title, meta_description, url, llm):
     """Optimizes SEO keywords based on structured guidelines."""
+    logger.info(f"Starting SEO keyword optimization process.")
     try:
         prompt = PromptTemplate(
             input_variables=["content", "page_title", "meta_description", "url"],
-            template="""Analyze the following content based on SEO keyword optimization guidelines. Provide a detailed evaluation of how well the content adheres to each guideline without offering suggestions for improvement:
-Each point must be addressed directly, without unnecessary verbosity.
-Maintain a clear sequence, following the order of the guidelines.
-Focus solely on evaluating adherence to the guidelines. Provide clear and actionable analysis for each point.
+            template="""
+            You are an expert SEO analyst. You will be provided with the content of a blog post, its page title, meta description, and URL. Your task is to analyze this data based on the SEO keyword optimization guidelines provided below. Your analysis should be factual and direct, stating whether or not each guideline is met, and provide a concise explanation for your assessment, drawing directly from the provided content. Avoid including any recommendations or suggestions beyond your analysis. If information to evaluate a guideline is unavailable, please respond with "Insufficient Information". 
+        
+            Format the analysis output as follows, with each section starting on a new line:
 
-Content:
-{content}
+            **Keyword and Search Intent Alignment:** [Your analysis here]
 
-Page Title:
-{page_title}
+            **Primary Keyword in Page Title:** [Your analysis here]
 
-Meta Description:
-{meta_description}
+            **Page Title Engagement:** [Your analysis here]
 
-URL:
-{url}
+            **Page Title Modifiers:** [Your analysis here]
 
-SEO Keyword Optimization Guidelines:
-    Evaluate whether the content aligns with the target keyword and search intent. Does the keyword fit the content, and is the content optimized for the keyword's search intent?
-    Assess if the page meets the user's search intent for the given keyword. Does the content satisfy what the user is looking for?
-    Evaluate the inclusion of the primary keyword in the page title. How effectively is it integrated?
-    Analyze the effectiveness of the page title in engaging users. Is it likely to attract clicks in search results?
-    Assess if the title could benefit from modifiers (e.g., "Best", "Top", "Guide", "2025").
-    Evaluate whether the title uses the maximum character length without exceeding it, ensuring it is clear and informative.
-    Confirm if the page title is wrapped in an H1 tag and follows correct HTML structure.
-    Analyze the inclusion of the primary keyword in the meta description. How well is the keyword used, and is the description compelling for users?
-    Evaluate the SEO-friendliness of the URL. Does it include the primary keyword and avoid unnecessary parameters?
-    Assess the placement of the primary keyword in the content, particularly in the first sentence.
-    Evaluate the keyword density. Is it balanced and consistent with competitor content?
-    Analyze the use of variations of the primary keyword and synonyms (LSI keywords). Are these terms used effectively throughout the content?
-    Evaluate the readability of the content. Is it structured in a way that is easy for users to read and digest?
-    Analyze how user experience factors (e.g., mobile-friendliness, load speed) may impact SEO performance.
+            **Page Title Character Length:** [Your analysis here]
 
-Based on this analysis, provide a thorough evaluation of how well the content adheres to the above SEO keyword optimization guidelines.
-        """
+            **Page Title HTML Structure:** [Your analysis here]
+
+            **Primary Keyword in Meta Description:** [Your analysis here]
+
+            **Primary Keyword in URL:** [Your analysis here]
+
+            **Primary Keyword in First Sentence:** [Your analysis here]
+
+            **Keyword Density:** [Your analysis here]
+
+            **Top 5 Keywords Distribution:** [Your analysis here]
+
+            **Variations and LSI Keywords:** [Your analysis here]
+
+            **Content:**
+            {content}
+
+            **Page Title:**
+            {page_title}
+
+            **Meta Description:**
+            {meta_description}
+
+            **URL:**
+            {url}
+
+            **SEO Keyword Optimization Guidelines:**
+                *   **Keyword and Search Intent Alignment:** Evaluate the content's alignment with the target keyword and search intent, ensuring it fits the content and satisfies user expectations.
+                *   **Primary Keyword in Page Title:** Assess the integration of the primary keyword in the page title and how well it is optimized for search intent.
+                *   **Page Title Engagement:** Analyze the effectiveness of the page title in engaging users and its likelihood of attracting clicks in search results.
+                *   **Page Title Modifiers:** Assess whether the page title could benefit from the inclusion of a temporal modifier, such as a year (e.g., '2025'), considering its current click-worthiness and character length.
+                *   **Page Title Character Length:** Confirm whether the page title utilizes the maximum character length without exceeding it while remaining clear and informative.
+                *   **Page Title HTML Structure:** Verify that the page title is wrapped in an H1 tag and follows correct HTML structure.
+                *   **Primary Keyword in Meta Description:** Evaluate the inclusion and usage of the primary keyword in the meta description and its effectiveness in compelling users.
+                *   **Primary Keyword in URL:** Determine if the primary keyword is present in the URL, and assess whether the URL structure is lean and optimized for SEO.
+                *   **Primary Keyword in First Sentence:** Analyze the placement of the primary keyword in the content, especially in the first sentence.
+                *   **Keyword Density:** Assess the keyword density, ensuring it is balanced and consistent with competitor content.
+                *   **Top 5 Keywords Distribution:** Ensure that top 5 keywords are distributed across various article sections.
+                *   **Variations and LSI Keywords:** Evaluate the use of variations of the primary keyword and synonyms (LSI keywords) throughout the content for effective optimization.
+            
+            The evaluation should deliver a professional, high-quality response that adheres to these standards.
+    """
         )
 
-        response = (prompt | llm).invoke({
-            "content": content,
-            "page_title": page_title,
-            "meta_description": meta_description,
-            "url": url,
-        })
-        
-        # Process and return the detailed evaluation as a list
-        return response.content.strip().split("\n")
+        response = llm.invoke(prompt.format(content=content, page_title=page_title, meta_description=meta_description, url=url))
+        logger.info(f"SEO keyword optimization process completed successfully.")
+        return response.split("\n")
     except Exception as e:
-        st.error(f"Error optimizing SEO keywords: {e}")
-        log_error("Error in optimize_seo_keywords", e)
-        return []
-
-#Evaluate Content quality of content
-def evaluate_content_quality(content):
+        logger.error(f"Error during SEO keyword optimization: {e}")
+        return [f"An error occurred during SEO keyword optimization: {e}"]
+        
+def evaluate_content_quality(content, llm):
     """Evaluates content quality based on structured guidelines using an LLM."""
+    logger.info(f"Starting content quality evaluation process.")
     try:
         prompt = PromptTemplate(
             input_variables=["content"],
-            template="""Analyze the following blog content and evaluate it based on the content guidelines below. Provide a detailed, structured, and professional evaluation for each point. Ensure the response adheres to the following requirements:
+            template="""
+             You are a content quality expert. You will be provided with the content of a blog post. Your task is to analyze the blog post content based on content quality guidelines. Your analysis should be factual and direct, stating whether or not each guideline is met, and provide a concise explanation for your assessment, drawing directly from the provided content. Avoid including any recommendations or suggestions beyond your analysis. If information to evaluate a guideline is unavailable, please respond with "Insufficient Information". 
 
- Each guideline title (e.g., "Spelling and Grammar") must be bold in the output for better readability.
- Each point must be addressed directly, without unnecessary verbosity.
- Maintain a clear sequence, following the order of the guidelines.
- Focus solely on evaluating adherence to the guidelines.Provide clear and actionable analysis for each point.
+            Each guideline title (e.g., "**Spelling and Grammar**") must be bold in the output for better readability.
+            Each point must be addressed directly, without unnecessary verbosity.
+            Maintain a clear sequence, following the order of the guidelines.
+            Focus solely on evaluating adherence to the guidelines. Provide a clear and actionable analysis for each point.
+            When providing your analysis of the **Spelling and Grammar** guideline, make note if there is awkward phrasing, extra spaces between words or periods, or other spacing errors.
 
-Blog Content:
-{content}
+            **Blog Content:**
+            {content}
 
-Content Quality Guidelines:
-    Spelling and Grammar: Examine the content to check for spacing, spelling and grammatical errors using tools like Grammarly. Clearly state whether any issues were identified.
-    Scannability: Assess the content's readability and formatting. Confirm if headings, bullet points, or other elements make the content easy to scan and consume.
-    Readability: Ensure the content is written at an 8th-grade readability level. Highlight any sentences or sections that are overly complex.
-    Engagement: Evaluate whether the content effectively captures and maintains the reader's attention throughout. Indicate any sections that might lack engagement.
-    Paragraph Structure: Verify that paragraphs are short and structured to avoid dense blocks of text. Mention if any sections deviate from this guideline.
-    Heading Structure: Analyze the logical flow of the headings. Confirm whether they guide the reader effectively through the content.
-    Heading Clarity: Check if the headings are descriptive and accurately reflect the topic of each section.
-    Keyword Usage: Evaluate the use of keyword variations, LSI keywords, or synonyms in the headings and throughout the content. Note the relevance and frequency of their usage.
-    Use of Lists: Verify the use of bullet points and numbered lists where applicable. Confirm whether they enhance clarity and structure.
-    Originality and Relevance: Validate the originality and relevance of the content. State whether it aligns with current trends and provides up-to-date information.
+            **Content Quality Guidelines:**
+                *   **Spelling and Grammar**: Examine the content to check for spacing, spelling and grammatical errors using tools like Grammarly. Clearly state whether any issues were identified.
+                *   **Scannability**: Assess the content's readability and formatting. Confirm if headings, bullet points, or other elements make the content easy to scan and consume.
+                *   **Readability**: Ensure the content is written at an 8th-grade readability level. Highlight any sentences or sections that are overly complex.
+                *  **Engagement**: Evaluate whether the content effectively captures and maintains the reader's attention throughout. Indicate any sections that might lack engagement.
+                *   **Paragraph Structure**: Verify that paragraphs are short and structured to avoid dense blocks of text. Mention if any sections deviate from this guideline.
+                *   **Heading Structure**: Analyze the logical flow of the headings. Confirm whether they guide the reader effectively through the content.
+                *   **Heading Clarity**: Check if the headings are descriptive and accurately reflect the topic of each section.
+                *   **Keyword Usage**: Evaluate the use of keyword variations, LSI keywords, or synonyms in the headings and throughout the content. Note the relevance and frequency of their usage.
+                *   **Use of Lists**: Verify the use of bullet points and numbered lists where applicable. Confirm whether they enhance clarity and structure.
+                *   **Originality and Relevance**: Validate the originality and relevance of the content. State whether it aligns with current trends and provides up-to-date information.
 
-The evaluation should deliver a professional, high-quality response that adheres to these standards.
+            The evaluation should deliver a professional, high-quality response that adheres to these standards.
         """
         )
 
-        response = (prompt | llm).invoke({
-            "content": content,
-        })
-        
-        # Process and return the detailed evaluation as a list
-        return response.content.strip().split("\n")
+        response = llm.invoke(prompt.format(content=content))
+        logger.info(f"Content quality evaluation process completed successfully.")
+        return response.split("\n")
     except Exception as e:
-        st.error(f"Error evaluating content quality: {e}")
-        log_error("Error in evaluate_content_quality", e)
-        return []
+        logger.error(f"Error during content quality evaluation: {e}")
+        return [f"An error occurred during content quality evaluation: {e}"]
 
-def extract_links(url):
-    response = requests.get(url)
-    soup = BeautifulSoup(response.text, 'html.parser')
-    
-    internal_links = []
-    external_links = []
-
-    for link in soup.find_all('a', href=True):
-        href = link['href']
-        # Check if the link is internal or external
-        if href.startswith('/') or url in href:
-            internal_links.append(href)
-        else:
-            external_links.append(href)
-
-    return internal_links, external_links
-
-#Evaluate Link quality of content
-def evaluate_link_quality(content, internal_links, external_links):
-    """Evaluates content quality based on structured guidelines using an LLM."""
-    try:
-        prompt = PromptTemplate(
-            input_variables=["content", "internal_links", "external_links"],
-            template="""Analyze the following page content and evaluate it based on the link-related guidelines below. Provide a detailed, structured, and professional evaluation for each point. Ensure the response adheres to the following requirements:
-
- Each guideline title (e.g., "Internal Links") must be bold in the output for better readability.
- Each point must be addressed directly, without unnecessary verbosity.
- Maintain a clear sequence, following the order of the guidelines.
- Focus solely on evaluating adherence to the guidelines.Provide clear and actionable analysis for each point.
-
-Page Content:
-{content}
-
-Link Quality Guidelines:
-    Internal Links: Confirm if your page contains internal links. Provide a clear statement about the presence or absence of internal links.
-    Descriptive Anchor Text: Evaluate whether the internal links are using descriptive and relevant anchor text that clearly indicates the target content.
-    Internal Link Optimization: Assess if the internal links are optimized based on first link priority (i.e., ensuring that the most important links appear first).
-    Breadcrumbs: Verify whether the page includes breadcrumbs to improve navigation and user experience.
-    Usefulness of Internal Links: Evaluate if the internal links are genuinely useful to the reader, leading to relevant and valuable content.
-    Preferred URLs for Internal Links: Check whether all internal links are using the preferred URLs (i.e., ensuring consistency in linking to canonical versions).
-    External Links: Confirm if your page includes external links to relevant sources, partners, or content.
-    Affiliate and Sponsored Links: Verify that all affiliate, sponsored, or paid external links use the “NoFollow” tag to comply with SEO best practices.
-    External Links Opening in New Window: Evaluate whether all external links are set to open in a new window, ensuring users are not navigated away from the page.
-    Broken Links: Confirm if there are any broken links (either internal or external) on the page and specify whether they exist.
-
-The evaluation should deliver a professional, high-quality response that adheres to these standards.        
-        """
-        )
-
-        response = (prompt | llm).invoke({
-            "content": content,
-            "internal_links":", ".join(internal_links) if internal_links else "None found",
-            "external_links":", ".join(external_links) if external_links else "None found"
-        })
-          
-        # Process and return the detailed evaluation as a list
-        return response.content.strip().split("\n")
-    except Exception as e:
-        st.error(f"Error evaluating content quality: {e}")
-        log_error("Error in evaluate_content_quality", e)
-        return []
-
-
-# Streamlit App
 def main():
     st.title("Blog SEO Analyzer")
     st.markdown("---")
+
+    # CSS to style subheadings
+    st.markdown("""
+        <style>
+        .st-expander h4 {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #333; /* You can choose a color */
+            padding-bottom: 0.5em;
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
     # Input blog URL
     blog_url = st.text_input("Enter Blog URL:")
     if st.button("Analyze"):
         with st.spinner("Analyzing blog..."):
-            # Retrieve blog content
-            content, title, meta_description = retrieve_blog_content(blog_url)
+            soup = scrape_page_content(blog_url)
+            if not soup:
+                st.error("Failed to retrieve page content")
+                return
+
+            # Retrieve blog content, title, meta description
+            content, title, meta_description = retrieve_blog_content(blog_url, soup)
             if not content:
                 return
 
-            readability_grade,readability_ease = calculate_readability(content)
+            readability_grade, readability_ease = calculate_readability(content)
             grade_description, ease_description = describe_readability(readability_grade, readability_ease)
 
-            st.subheader("Readability Scores")
-            if readability_grade:
-               st.markdown(
-                   f"""
-                   <div style="font-size:22px; font-weight:bold;">Flesch-Kincaid Grade Level</div>
-                   <div style="font-size:16px; color:gray;">{readability_grade} - {grade_description}</div>
-                   """,
-                   unsafe_allow_html=True,
-                )
-            else:
-                st.markdown("**Flesch-Kincaid Grade Level**: N/A")
+            with st.expander("Readability Scores"):
+                if readability_grade:
+                    st.markdown(
+                        f"""
+                        <div style="font-size:22px; font-weight:bold;">Flesch-Kincaid Grade Level</div>
+                        <div style="font-size:16px; color:gray;">{readability_grade} - {grade_description}</div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown("**Flesch-Kincaid Grade Level**: N/A")
 
-            if readability_ease:
-                st.markdown(
-                    f"""
-                    <div style="font-size:22px; font-weight:bold;">Flesch Reading Ease</div>
-                    <div style="font-size:16px; color:gray;">{readability_ease} - {ease_description}</div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.markdown("**Flesch Reading Ease**: N/A")
- 
-            #st.markdown("---")
+                if readability_ease:
+                    st.markdown(
+                        f"""
+                        <div style="font-size:22px; font-weight:bold;">Flesch Reading Ease</div>
+                        <div style="font-size:16px; color:gray;">{readability_ease} - {ease_description}</div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                else:
+                     st.markdown("**Flesch Reading Ease**: N/A")
 
             # Extract keywords from blog content
             extracted_keywords = extract_keywords_from_content(content)
-            st.subheader("Extracted Keywords from Blog Content")
-            if extracted_keywords:
-              #st.write(", ".join(extracted_keywords))
-              st.markdown("\n".join([f"{i+1}. {keyword}" for i, keyword in enumerate(extracted_keywords)]))
-            else:
-              st.warning("No keywords found.")
+            with st.expander("Extracted Keywords from Blog Content"):
+                if extracted_keywords:
+                    st.markdown("\n".join([f"{i+1}. {keyword}" for i, keyword in enumerate(extracted_keywords)]))
+                else:
+                   st.warning("No keywords found.")
 
             # Optimize SEO using extracted keywords
-            st.subheader("Keyword Optimization Analysis:")
-            seo_suggestions = optimize_seo_keywords(content, title, meta_description, blog_url)
-            if seo_suggestions:
-              valid_suggestions = [suggestion.strip() for suggestion in seo_suggestions if suggestion.strip()]
-              if valid_suggestions:
-                 st.markdown("\n".join([f" {suggestion}" for suggestion in (valid_suggestions) if suggestion.strip()]))
-              else:
-                 st.write("No valid SEO keyword optimization suggestions available.")
-              #st.markdown("\n".join([f"- {suggestion}" for suggestion in enumerate(seo_suggestions)]))
-            else:
-                st.write("No SEO keyword optimization suggestions available.")
+            
+            with st.expander("Keyword Optimization Analysis"):
+                seo_suggestions = optimize_seo_keywords(content, title, meta_description, blog_url, llm)
+                if seo_suggestions:
+                    st.markdown("\n".join([f" {suggestion}" for suggestion in seo_suggestions]))
+                else:
+                    st.write("No SEO keyword optimization suggestions available.")
 
             # Evaluate the content quality
-            st.subheader("Content Evaluation Analysis:")
-            content_quality = evaluate_content_quality(content)
-            if content_quality:
-                st.markdown("\n".join([f"{i+1}. {evaluation}" for i, evaluation in enumerate(content_quality) if evaluation.strip()]))
-            else:
-                st.write("No content quality evaluation available.")
-
-            #Evaluate the link quality
-        try:
-            # Extract links from the blog
-            internal_links, external_links = extract_links(blog_url)
-
-            st.subheader("Link Quality Analysis")
-
-            # Consolidate internal links and format as HTML
-            unique_internal_links = list(set(internal_links))
-            internal_links_formatted = [f'<a href="{link}" target="_blank">{link}</a>' for link in unique_internal_links]
-
-            # Consolidate external links and format as HTML
-            unique_external_links = list(set(external_links))
-            external_links_formatted = [f'<a href="{link}" target="_blank">{link}</a>' for link in unique_external_links]
-
-            # Create a DataFrame for the table
-            data = {
-                "Category": ["Internal Links", "External Links"],
-                "Links": [", ".join(internal_links_formatted), ", ".join(external_links_formatted)],
-                "Count": [len(unique_internal_links), len(unique_external_links)],
-            }
-            df = pd.DataFrame(data)
-
-            # Display table
-            st.markdown("### Link Analysis Table")
-            st.write(df.to_html(escape=False, index=False), unsafe_allow_html=True)
-
-            # Evaluate link quality
-            link_content = " ".join(internal_links + external_links)
-            evaluation_link = evaluate_link_quality(link_content, unique_internal_links, unique_external_links)
-
-            if evaluation_link:
-               valid_evaluations = [evaluation.strip() for evaluation in evaluation_link if evaluation.strip()]
-               if valid_evaluations:
-                 st.markdown("### Link Quality Evaluation")
-                 st.markdown("\n".join([f"{i+1}. {evaluation}" for i, evaluation in enumerate(valid_evaluations) if evaluation.strip()]))
-               else:
-                 st.write("No valid link quality evaluations available.") 
-            else:
-                st.write("No Link evaluation available.")     
-        except Exception as e:
-            st.error(f"Error analyzing the blog: {e}") 
-
+            with st.expander("Content Evaluation Analysis"):
+                content_quality = evaluate_content_quality(content, llm)
+                if content_quality:
+                    st.markdown("\n".join([f" {evaluation}" for evaluation in content_quality]))
+                else:
+                   st.write("No content quality evaluation available.")
 
 if __name__ == "__main__":
     main()
