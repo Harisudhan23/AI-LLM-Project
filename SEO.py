@@ -7,13 +7,14 @@ import spacy
 import logging
 import textstat
 from collections import Counter
-import pandas as pd
 import re  # Added for regex operations
 from urllib.parse import urlparse, urljoin
-import html
+import os
+from dotenv import load_dotenv
 
 # Constants
-API_KEY = "AIzaSyCTwrc_zTvlfkwXKs-QJOK61tGZfEpUbzQ"  # Replace with your actual API key
+load_dotenv()
+API_KEY =  os.getenv("GOOGLE_API_KEY") # Replace with your actual API key
 LLM_MODEL = "gemini-2.0-flash-exp"
 
 # Initialize LLM
@@ -173,7 +174,6 @@ def describe_readability(kincaid_grade, reading_ease):
     else:
         grade_description = "Complex content, typically for academic or expert-level readers."
         grade_suggestion = "Simplify sentences, use common words, and clarify complex topics for a wider audience."
-
 
     if reading_ease >= 80:
         ease_description = "Very easy to read."
@@ -385,7 +385,6 @@ Affiliate and Sponsored Links: Based on the page content, determine if there are
 External Links Opening in New Window: Based on the page content, and using best practices, are external links *likely* set to open in a new window? State if this is an inference from the provided content, or if it cannot be determined. Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
 Broken Links: Based on the page content, can it be *reasonably* inferred that there might be any broken links (either internal or external) on the page? Provide your analysis and explain why, and if this is not something that is possible to ascertain from the content, say that. Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
 
-
 Page Content:
 {content}
 """)
@@ -417,58 +416,79 @@ def analyze_url(soup, llm):
     return [remove_zw_chars(line) for line in processed_response]
 
 # Streamlit App
-import streamlit as st
-
 def main():
     st.title("Blog SEO Analyzer")
     st.markdown("---")
-    
-    blog_url = st.text_input("Enter Blog URL:")
-    analyze_btn = st.button("Analyze")
-    suggest_btn = st.button("Show Suggestions")
-    
-    if analyze_btn or suggest_btn:
+
+    if "blog_url" not in st.session_state:
+        st.session_state["blog_url"] = ""
+
+    if "analysis_done" not in st.session_state:
+        st.session_state["analysis_done"] = False
+
+    blog_url = st.text_input("Enter Blog URL:", value=st.session_state["blog_url"], placeholder="https://example.com/blog")
+
+    # Creating two columns for Clear (left) and Analyze (right)
+    col1, col2 = st.columns([1, 1])
+
+    with col2:
+        if st.button("Clear"):
+            st.session_state["blog_url"] = ""
+            st.session_state["analysis_done"] = False
+            st.rerun()
+
+    with col1:
+        analyze_btn = st.button("Analyze")
+
+    if analyze_btn:
         with st.spinner("Processing..."):
             soup = scrape_page_content(blog_url)
             if not soup:
                 st.error("Failed to retrieve page content")
                 return
-            
+
             content, title, meta_description = retrieve_blog_content(blog_url, soup)
             if not content:
                 st.error("Failed to extract content from the blog")
                 return
 
-            if analyze_btn:
-                show_analysis(content, title, meta_description, soup, blog_url)
-            if suggest_btn:
+            st.session_state["analysis_done"] = True  # Enable "Show Suggestions" button
+            show_analysis(content, title, meta_description, soup, blog_url)
+
+    # Show "Show Suggestions" button only after analysis
+    if st.session_state["analysis_done"]:
+        suggest_btn = st.button("Show Suggestions")
+        if suggest_btn:
+            with st.spinner("Processing Suggestions..."):
+                soup = scrape_page_content(blog_url)
+                content, title, meta_description = retrieve_blog_content(blog_url, soup)
                 show_suggestions(content, title, meta_description, soup, blog_url)
 
 def show_analysis(content, title, meta_description, soup, blog_url):
     st.subheader("Analysis")
     readability_grade, readability_ease = calculate_readability(content)
     grade_description, ease_description, _, _ = describe_readability(readability_grade, readability_ease)
-    
+
     with st.expander("Readability Scores"):
         st.write(f"**Flesch-Kincaid Grade Level:** {readability_grade} - {grade_description}")
         st.write(f"**Flesch Reading Ease:** {readability_ease} - {ease_description}")
-    
+
     extracted_keywords = extract_keywords_from_content(content)
     with st.expander("Extracted Keywords"):
         st.write("\n".join(extracted_keywords) if extracted_keywords else "No keywords found.")
-    
+
     seo_analysis = optimize_seo_keywords(content, title, meta_description, blog_url, llm)
     with st.expander("Keyword Optimization Analysis"):
         for item in seo_analysis:
             analysis, _ = item.split("Suggestions:") if "Suggestions:" in item else (item, "")
             st.write(analysis.strip())
-    
+
     content_quality = evaluate_content_quality(content, llm)
     with st.expander("Content Evaluation Analysis"):
         for item in content_quality:
             analysis, _ = item.split("Suggestions:") if "Suggestions:" in item else (item, "")
             st.write(analysis.strip())
-    
+
     link_analysis = analyze_url(soup, llm)
     with st.expander("Link Evaluation"):
         for item in link_analysis:
@@ -477,7 +497,7 @@ def show_analysis(content, title, meta_description, soup, blog_url):
 
 def show_suggestions(content, title, meta_description, soup, blog_url):
     st.subheader("Suggestions")
-    
+
     _, _, grade_suggestion, ease_suggestion = describe_readability(*calculate_readability(content))
     if grade_suggestion or ease_suggestion:
         with st.expander("Readability Suggestions"):
@@ -485,7 +505,7 @@ def show_suggestions(content, title, meta_description, soup, blog_url):
                 st.write(f"- {grade_suggestion}")
             if ease_suggestion:
                 st.write(f"- {ease_suggestion}")
-    
+
     seo_suggestions = optimize_seo_keywords(content, title, meta_description, blog_url, llm)
     if any("Suggestions:" in item and "No Suggestions" not in item for item in seo_suggestions):
         with st.expander("Keyword Optimization Suggestions"):
@@ -493,7 +513,7 @@ def show_suggestions(content, title, meta_description, soup, blog_url):
                 _, suggestions = item.split("Suggestions:") if "Suggestions:" in item else ("", "")
                 if suggestions.strip() and suggestions.strip() != "No Suggestions":
                     st.write(suggestions.strip())
-    
+
     content_suggestions = evaluate_content_quality(content, llm)
     if any("Suggestions:" in item and "No Suggestions" not in item for item in content_suggestions):
         with st.expander("Content Evaluation Suggestions"):
@@ -501,7 +521,7 @@ def show_suggestions(content, title, meta_description, soup, blog_url):
                 _, suggestions = item.split("Suggestions:") if "Suggestions:" in item else ("", "")
                 if suggestions.strip() and suggestions.strip() != "No Suggestions":
                     st.write(suggestions.strip())
-    
+
     link_suggestions = analyze_url(soup, llm)
     if any("Suggestions:" in item and "No Suggestions" not in item for item in link_suggestions):
         with st.expander("Link Evaluation Suggestions"):
