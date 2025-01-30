@@ -475,7 +475,7 @@ def show_analysis(content, title, meta_description, soup, blog_url):
 
     extracted_keywords = extract_keywords_from_content(content)
     with st.expander("Extracted Keywords"):
-        st.write("\n".join(extracted_keywords) if extracted_keywords else "No keywords found.")
+        st.write("\n".join(extracted_keywords) if enumerate(extracted_keywords) else "No keywords found.")
 
     seo_analysis = optimize_seo_keywords(content, title, meta_description, blog_url, llm)
     with st.expander("Keyword Optimization Analysis"):
