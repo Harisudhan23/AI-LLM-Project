@@ -13,7 +13,7 @@ from urllib.parse import urlparse, urljoin
 import html
 
 # Constants
-API_KEY = "AIzaSyBzSFL43Im7fIv-UGD9WTV4RitWG4VQC0g"  # Replace with your actual API key
+API_KEY = "AIzaSyCTwrc_zTvlfkwXKs-QJOK61tGZfEpUbzQ"  # Replace with your actual API key
 LLM_MODEL = "gemini-2.0-flash-exp"
 
 # Initialize LLM
@@ -103,6 +103,7 @@ def retrieve_blog_content(url, soup):
         elements = soup.find_all(['p', 'h1', 'h2', 'h3','h4','h5','h6', 'li'])
         text_content = " ".join([elem.text for elem in elements])
         content = clean_placeholder_text(text_content, url) #Clean retrieved text
+        #content = remove_placeholder_unicode(content)
         title = soup.title.string.strip() if soup.title else "No title found"
         meta_tag = soup.find("meta", {"name": "description"}) or soup.find("meta", {"property": "og:description"})
         meta_description = meta_tag["content"].strip() if meta_tag else "No meta description found"
@@ -226,22 +227,22 @@ def optimize_seo_keywords(content, page_title, meta_description, url, llm):
     try:
         prompt = PromptTemplate(
             input_variables=["content", "page_title", "meta_description", "url"],
-            template="""Analyze the following content based on SEO keyword optimization guidelines. Provide a detailed evaluation of how well the content adheres to each guideline. In addition, provide suggestions to improve the page in terms of keyword optimization for SEO Performance. Do not include any concluding statements or summaries.
+            template="""Analyze the following content based on SEO keyword optimization guidelines. Provide a detailed, accurate analysis, evaluation of how well the content adheres to each guideline. In addition, provide suggestions to improve the page in terms of keyword optimization for SEO Performance. If there are no suggestions for improvement, then explicitly state 'No Suggestions'. Do not include any concluding statements or summaries.
 
         Format the analysis and suggestions as follows, with each output on a separate line:
 
-        Keyword and Search Intent Alignment: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
-        Primary Keyword in Page Title: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
-        Page Title Engagement: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
-        Page Title Modifiers: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
-        Page Title Character Length: [Your analysis here]. Suggestios: [Specific suggestions here or 'No Suggestions
-        Page Title HTML Structure: [Your analysis here. If you can't assess, s]tate that]. Suggestions: [Specific suggestions here or 'No Suggestions']
-        Primary Keyword in Meta Description: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
-        Primary Keyword in URL: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
-        Primary Keyword in First Sentence: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
-        Keyword Density: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
-        Top 5 Keywords Distribution: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
-        Variations and LSI Keywords: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+        Keyword and Search Intent Alignment:  [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+        Primary Keyword in Page Title:  [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+        Page Title Engagement:  [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+        Page Title Modifiers:  [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+        Page Title Character Length:  [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+        Page Title HTML Structure:  [Your analysis here. If you can't assess, state that]. Suggestions: [Specific suggestions here or 'No Suggestions']
+        Primary Keyword in Meta Description:  [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+        Primary Keyword in URL:  [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+        Primary Keyword in First Sentence:  [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+        Keyword Density:  [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+        Top 5 Keywords Distribution:  [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+        Variations and LSI Keywords:  [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
 
         Content:
         {content}
@@ -271,7 +272,7 @@ def optimize_seo_keywords(content, page_title, meta_description, url, llm):
             
         The evaluation should deliver a professional, high-quality response that adheres to these standards.
     """
-        )
+)
 
         cleaned_content = clean_placeholder_text(content, url)
         cleaned_page_title = clean_placeholder_text(page_title)
@@ -310,39 +311,40 @@ def evaluate_content_quality(content, llm):
     try:
         prompt = PromptTemplate(
             input_variables=["content"],
-            template="""Analyze the following content based on content quality guidelines. Provide a detailed evaluation of how well the content adheres to each guideline. In addition, provide specific suggestions to improve the content quality and overall user experience for SEO performance.
+            template="""Analyze the following content based on content quality guidelines. Provide a detailed,accurate analysis, fact-based evaluation of how well the content adheres to each guideline. In addition, provide specific, actionable suggestions to improve the content quality *specifically for SEO performance and user engagement*. If there are no specific, actionable suggestions for SEO performance or user engagement improvements based on the available information, then explicitly state 'No Suggestions'. Do not include any concluding statements or summaries.
 
-            Format the analysis and suggestions as follows:
+    Format the analysis and suggestions as follows, with each output on a separate line:
 
-            Spelling and Grammar: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
-            Scannability: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
-            Readability: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
-            Engagement: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
-            Paragraph Structure: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
-            Heading Structure: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
-            Heading Clarity: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
-            Keyword Usage: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
-            Use of Lists: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
-            Originality and Relevance: [Your analysis here]. Suggestions: [Specific suggestions here or 'No Suggestions']
+    Spelling and Grammar: [Your analysis here, state clearly if any spacing, spelling or grammatical issues are present]. Suggestions: [Specific suggestions for SEO performance and user engagement here or 'No Suggestions']
+    Scannability:  [Your analysis here, describe how headings, bullet points, and other elements are used to make the content easy to scan. Provide examples of where elements make it easy to scan the text]. Suggestions: [Specific suggestions for SEO performance and user engagement here or 'No Suggestions']
+    Readability:  [Your analysis here, highlight specific sentences or sections that are overly complex and assess if the content meets an 8th-grade readability level]. Suggestions: [Specific suggestions for SEO performance and user engagement here or 'No Suggestions']
+    Engagement:  [Your analysis here, assess how the content effectively captures and maintains the reader's attention, and make note of any specific engaging or disengaging elements]. Suggestions: [Specific suggestions for SEO performance and user engagement here or 'No Suggestions']
+    Paragraph Structure:  [Your analysis here, check if paragraphs are short, concise and structured appropriately. Highlight if any sections use dense blocks of text]. Suggestions: [Specific suggestions for SEO performance and user engagement here or 'No Suggestions']
+    Heading Structure:  [Your analysis here, provide an analysis of the heading structure and if it helps the reader navigate the content and its logical flow]. Suggestions: [Specific suggestions for SEO performance and user engagement here or 'No Suggestions']
+    Heading Clarity:  [Your analysis here, assess if headings are descriptive, clear and accurately reflect the topic of each section, provide details]. Suggestions: [Specific suggestions for SEO performance and user engagement here or 'No Suggestions']
+    Keyword Usage:  [Your analysis here, assess the use of keyword variations, LSI keywords, or synonyms in the headings and throughout the content and note the relevance and frequency of their usage]. Suggestions: [Specific suggestions for SEO performance and user engagement here or 'No Suggestions']
+    Use of Lists: [Your analysis here, confirm if bullet points and numbered lists are used effectively and enhance clarity and structure]. Suggestions: [Specific suggestions for SEO performance and user engagement here or 'No Suggestions']
+    Originality and Relevance: [Your analysis here, validate the originality and relevance of the content. State if it aligns with current trends and provides up-to-date information. Also comment if the content appears to be well-researched and informative]. Suggestions: [Specific suggestions for SEO performance and user engagement here or 'No Suggestions']
 
-            Blog Content:
-            {content}
 
-            Content Quality Guidelines:
-                Examine the content to check for spacing, spelling and grammatical errors using tools like Grammarly. Clearly state whether any issues were identified.
-                Assess the content's readability and formatting. Confirm if headings, bullet points, or other elements make the content easy to scan and consume.
-                Ensure the content is written at an 8th-grade readability level. Highlight any sentences or sections that are overly complex.
-                Evaluate whether the content effectively captures and maintains the reader's attention throughout. Indicate any sections that might lack engagement.
-                Verify that paragraphs are short and structured to avoid dense blocks of text. Mention if any sections deviate from this guideline.
-                Analyze the logical flow of the headings. Confirm whether they guide the reader effectively through the content.
-                Check if the headings are descriptive and accurately reflect the topic of each section.
-                Evaluate the use of keyword variations, LSI keywords, or synonyms in the headings and throughout the content. Note the relevance and frequency of their usage.
-                Verify the use of bullet points and numbered lists where applicable. Confirm whether they enhance clarity and structure.
-                Validate the originality and relevance of the content. State whether it aligns with current trends and provides up-to-date information.
+    Blog Content:
+    {content}
 
-            The evaluation should deliver a professional, high-quality response that adheres to these standards.
-        """
-        )
+    Content Quality Guidelines:
+        Examine the content to check for spacing, spelling and grammatical errors using tools like Grammarly. Clearly state whether any issues were identified.
+        Assess the content's readability and formatting. Confirm if headings, bullet points, or other elements make the content easy to scan and consume.
+        Ensure the content is written at an 8th-grade readability level. Highlight any sentences or sections that are overly complex.
+        Evaluate whether the content effectively captures and maintains the reader's attention throughout. Indicate any sections that might lack engagement.
+        Verify that paragraphs are short and structured to avoid dense blocks of text. Mention if any sections deviate from this guideline.
+        Analyze the logical flow of the headings. Confirm whether they guide the reader effectively through the content.
+        Check if the headings are descriptive and accurately reflect the topic of each section.
+        Evaluate the use of keyword variations, LSI keywords, or synonyms in the headings and throughout the content. Note the relevance and frequency of their usage.
+        Verify the use of bullet points and numbered lists where applicable. Confirm whether they enhance clarity and structure.
+        Validate the originality and relevance of the content. State whether it aligns with current trends and provides up-to-date information.
+
+    The evaluation should deliver a professional, high-quality response that adheres to these standards.
+    """
+)
 
         # Clean the text *before* printing and sending to LLM
         cleaned_content = clean_placeholder_text(content)
@@ -368,39 +370,20 @@ def evaluate_content_quality(content, llm):
         return []
 
 prompt_template = PromptTemplate.from_template("""
-Analyze the following page content and evaluate its link structure according to the guidelines provided. Provide a detailed, fact-based evaluation of how well the content adheres to each guideline, focusing on concrete HTML elements and patterns rather than inferences. Include examples of the detected elements from the page content where possible. In addition, provide specific, actionable suggestions to improve the link structure *specifically for SEO performance*. If there are no specific, actionable suggestions for SEO improvement based on the available information, then explicitly state 'No Suggestions'. Do not include any concluding statements.
+Analyze the following page content and evaluate its link structure according to the guidelines provided. Provide a detailed,accurate analysis, fact-based evaluation of how well the content adheres to each guideline, focusing on concrete HTML elements and patterns rather than inferences. Include examples of the detected elements from the page content where possible. In addition, provide specific, actionable suggestions to improve the link structure *specifically for SEO performance*. If there are no specific, actionable suggestions for SEO improvement based on the available information, then explicitly state 'No Suggestions'. Do not include any concluding statements.
 
 Format the analysis and suggestions as follows, with each output on a separate line:
 
-**Internal Links**
-*   Analysis: Based on the provided page content, identify if internal links (links to other pages on the same website) are present and provide details on where they are located and the types of links they appear to be (e.g. links in the body, navigation or footer). If found, state where the internal links are located and what type of links they are, otherwise state 'No Internal Links Found'.  Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
-
-**Descriptive Anchor Text**
-*   Analysis: Based on the provided page content, analyze if the internal links use descriptive anchor text (text that clearly indicates the target page's content) and provide examples. State if descriptive anchor text is used and provide examples, based on what can be determined from the content. Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
-
-**Internal Link Optimization**
-*   Analysis: Analyze the page content. Based on what can be determined from the content, are important internal links (e.g. higher value or more relevant pages) placed higher or earlier in the page or are they not prioritized? Identify which links appear to be more important based on their placement. State if important links are prioritized, or if they are not and provide details.  Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
-
-**Breadcrumbs**
-*   Analysis: Based on the page HTML, specifically identify if breadcrumbs are present by looking for a `<nav>` element, which contains child elements using `<span>` or  `<a>` tags. If breadcrumbs are present, state that 'Breadcrumbs are present', and also provide details such as the breadcrumb structure. If not state 'No breadcrumbs found'.  Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
-
-**Usefulness of Internal Links**
-*   Analysis: Based on the page content, assess if internal links are useful for the user (e.g., do they link to related content that helps the user). Provide details of what kind of links they are linking to, and state if they are useful or not, based on what can be determined from the content. Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
-
-**Preferred URLs for Internal Links**
-*   Analysis: Based on the page content, analyze the URLs of the internal links. Are they using the preferred or canonical versions (e.g., ensuring all links to the same page are using the same URL format)? Provide examples, stating if this can be determined or if not. Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
-
-**External Links**
-*   Analysis: Based on the page content, determine if the page includes external links (links to other websites) to relevant sources, partners, or content, and state if this is highly likely or not. Provide details and why this determination has been made based on what is present in the content. Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
-
-**Affiliate and Sponsored Links**
-*   Analysis: Based on the page content, determine if there are affiliate, sponsored, or paid external links on the page. Based on the context, determine how likely it is that these exist. State if it can be inferred or not. If it can be inferred that these exist, make an inference if they are *likely* to be 'nofollow'. State if this is an inference from the provided content, or if it cannot be determined. Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
-
-**External Links Opening in New Window**
-*   Analysis: Based on the page content, and using best practices, are external links *likely* set to open in a new window? State if this is an inference from the provided content, or if it cannot be determined. Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
-
-**Broken Links**
-*   Analysis: Based on the page content, can it be *reasonably* inferred that there might be any broken links (either internal or external) on the page? Provide your analysis and explain why, and if this is not something that is possible to ascertain from the content, say that. Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
+Internal Links:  Based on the provided page content, identify if internal links (links to other pages on the same website) are present and provide details on where they are located and the types of links they appear to be (e.g. links in the body, navigation or footer). If found, state where the internal links are located and what type of links they are, otherwise state 'No Internal Links Found'.  Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
+Descriptive Anchor Text:  Based on the provided page content, analyze if the internal links use descriptive anchor text (text that clearly indicates the target page's content) and provide examples. State if descriptive anchor text is used and provide examples, based on what can be determined from the content. Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
+Internal Link Optimization: Analyze the page content. Based on what can be determined from the content, are important internal links (e.g. higher value or more relevant pages) placed higher or earlier in the page or are they not prioritized? Identify which links appear to be more important based on their placement. State if important links are prioritized, or if they are not and provide details.  Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
+Breadcrumbs: Analyze the page and ensure Breadcrumbs are present or not, at least including "Home" and "Blog". The exact structure would need confirmation by inspecting the HTML. Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
+Usefulness of Internal Links: Based on the page content, assess if internal links are useful for the user (e.g., do they link to related content that helps the user). Provide details of what kind of links they are linking to, and state if they are useful or not, based on what can be determined from the content. Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
+Preferred URLs for Internal Links: Based on the page content, analyze the URLs of the internal links. Are they using the preferred or canonical versions (e.g., ensuring all links to the same page are using the same URL format)? Provide examples, stating if this can be determined or if not. Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
+External Links: Based on the page content, determine if the page includes external links (links to other websites) to relevant sources, partners, or content, and state if this is highly likely or not. Provide details and why this determination has been made based on what is present in the content. Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
+Affiliate and Sponsored Links: Based on the page content, determine if there are affiliate, sponsored, or paid external links on the page. Based on the context, determine how likely it is that these exist. State if it can be inferred or not. If it can be inferred that these exist, make an inference if they are *likely* to be 'nofollow'. State if this is an inference from the provided content, or if it cannot be determined. Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
+External Links Opening in New Window: Based on the page content, and using best practices, are external links *likely* set to open in a new window? State if this is an inference from the provided content, or if it cannot be determined. Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
+Broken Links: Based on the page content, can it be *reasonably* inferred that there might be any broken links (either internal or external) on the page? Provide your analysis and explain why, and if this is not something that is possible to ascertain from the content, say that. Suggestions: [Specific suggestions for SEO performance here or 'No Suggestions']
 
 
 Page Content:
@@ -433,150 +416,99 @@ def analyze_url(soup, llm):
 
     return [remove_zw_chars(line) for line in processed_response]
 
-
 # Streamlit App
+import streamlit as st
+
 def main():
     st.title("Blog SEO Analyzer")
     st.markdown("---")
-
-    # CSS to style subheadings
-    st.markdown("""
-        <style>
-        .st-expander h4 {
-            font-size: 1.5em;
-            font-weight: bold;
-            color: #333; /* You can choose a color */
-            padding-bottom: 0.5em;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
-    # Input blog URL
+    
     blog_url = st.text_input("Enter Blog URL:")
-    #show_readability_suggestions = st.checkbox("Show Readability Suggestions", value = True)
-    show_seo_suggestions = st.checkbox("Show Keyword Optimization Suggestions", value=True)
-    show_content_suggestions = st.checkbox("Show Content Evaluation Suggestions", value = True)
-    show_link_suggestions = st.checkbox("Show Link Evaluation Suggestions", value=True)
-    if st.button("Analyze"):
-        with st.spinner("Analyzing blog..."):
+    analyze_btn = st.button("Analyze")
+    suggest_btn = st.button("Show Suggestions")
+    
+    if analyze_btn or suggest_btn:
+        with st.spinner("Processing..."):
             soup = scrape_page_content(blog_url)
             if not soup:
                 st.error("Failed to retrieve page content")
                 return
-
-            # Retrieve blog content, title, meta description
+            
             content, title, meta_description = retrieve_blog_content(blog_url, soup)
             if not content:
+                st.error("Failed to extract content from the blog")
                 return
 
-            readability_grade, readability_ease = calculate_readability(content)
-            grade_description, ease_description, grade_suggestion, ease_suggestion  = describe_readability(readability_grade, readability_ease)
+            if analyze_btn:
+                show_analysis(content, title, meta_description, soup, blog_url)
+            if suggest_btn:
+                show_suggestions(content, title, meta_description, soup, blog_url)
 
-            with st.expander("Readability Scores"):
-              if readability_grade:
-                st.markdown(
-                  f"""
-                  <div style="font-size:22px; font-weight:bold;">Flesch-Kincaid Grade Level</div>
-                  <div style="font-size:16px; color:gray;">{readability_grade} - {grade_description}</div>
-                  """,
-                  unsafe_allow_html=True,
-                )
-                if grade_suggestion:
-                  st.markdown(f"<div style='font-size:14px; color:red;'>Suggestion: {grade_suggestion}</div>", unsafe_allow_html=True)
-              else:
-               st.markdown("**Flesch-Kincaid Grade Level**: N/A")
+def show_analysis(content, title, meta_description, soup, blog_url):
+    st.subheader("Analysis")
+    readability_grade, readability_ease = calculate_readability(content)
+    grade_description, ease_description, _, _ = describe_readability(readability_grade, readability_ease)
+    
+    with st.expander("Readability Scores"):
+        st.write(f"**Flesch-Kincaid Grade Level:** {readability_grade} - {grade_description}")
+        st.write(f"**Flesch Reading Ease:** {readability_ease} - {ease_description}")
+    
+    extracted_keywords = extract_keywords_from_content(content)
+    with st.expander("Extracted Keywords"):
+        st.write("\n".join(extracted_keywords) if extracted_keywords else "No keywords found.")
+    
+    seo_analysis = optimize_seo_keywords(content, title, meta_description, blog_url, llm)
+    with st.expander("Keyword Optimization Analysis"):
+        for item in seo_analysis:
+            analysis, _ = item.split("Suggestions:") if "Suggestions:" in item else (item, "")
+            st.write(analysis.strip())
+    
+    content_quality = evaluate_content_quality(content, llm)
+    with st.expander("Content Evaluation Analysis"):
+        for item in content_quality:
+            analysis, _ = item.split("Suggestions:") if "Suggestions:" in item else (item, "")
+            st.write(analysis.strip())
+    
+    link_analysis = analyze_url(soup, llm)
+    with st.expander("Link Evaluation"):
+        for item in link_analysis:
+            analysis, _ = item.split("Suggestions:") if "Suggestions:" in item else (item, "")
+            st.write(analysis.strip())
 
-              if readability_ease:
-                st.markdown(
-                  f"""
-                  <div style="font-size:22px; font-weight:bold;">Flesch Reading Ease</div>
-                  <div style="font-size:16px; color:gray;">{readability_ease} - {ease_description}</div>
-                  """,
-                  unsafe_allow_html=True,
-                )
-                if ease_suggestion:
-                  st.markdown(f"<div style='font-size:14px; color:red;'>Suggestion: {ease_suggestion}</div>", unsafe_allow_html=True)
-              else:
-                st.markdown("**Flesch Reading Ease**: N/A")
-
-            # Extract keywords from blog content
-            extracted_keywords = extract_keywords_from_content(content)
-            with st.expander("Extracted Keywords from Blog Content"):
-                if extracted_keywords:
-                    st.markdown("\n".join([f"{i+1}. {keyword}" for i, keyword in enumerate(extracted_keywords)]))
-                else:
-                   st.warning("No keywords found.")
-
-            # Optimize SEO using extracted keywords
-            with st.expander("Keyword Optimization Analysis"):
-               seo_suggestions = optimize_seo_keywords(content, title, meta_description, blog_url, llm)
-               if seo_suggestions:
-                  for suggestion in seo_suggestions:
-                     parts = suggestion.split("Suggestions:")
-                     if len(parts) == 2:
-                       analysis, suggestions = parts
-                       st.markdown(f"<div style='font-size:16px; font-weight:bold;'>Analysis:</div><div style='font-size:14px;'>{analysis.strip()}</div>", unsafe_allow_html=True)
-                       if show_seo_suggestions and suggestions != "No Suggestions":
-                         st.markdown(f"<div style='font-size:16px; font-weight:bold; color:red;'>Suggestions:</div><div style='font-size:14px; color:red;'>{suggestions.strip()}</div>", unsafe_allow_html=True)
-                       elif show_seo_suggestions and suggestions == "No Suggestions":
-                         st.markdown(f"<div style='font-size:16px; font-weight:bold; color:gray;'>Suggestions:</div><div style='font-size:14px; color:gray;'>{suggestions.strip()}</div>", unsafe_allow_html=True)
-
-                     else:
-                      st.markdown(f" {suggestion}")
-               else:
-                 st.write("No SEO keyword optimization suggestions available.")
-
-            # Evaluate the content quality
-            with st.expander("Content Evaluation Analysis"):
-              content_quality = evaluate_content_quality(content, llm)
-              if content_quality:
-                for evaluation in content_quality:
-                   parts = evaluation.split("Suggestions:")
-                   if len(parts) == 2:
-                     analysis, suggestions = parts
-                     st.markdown(f"<div style='font-size:16px; font-weight:bold;'>Analysis:</div><div style='font-size:14px;'>{analysis.strip()}</div>", unsafe_allow_html=True)
-                     if show_content_suggestions and suggestions != "No Suggestions":
-                       st.markdown(f"<div style='font-size:16px; font-weight:bold; color:red;'>Suggestions:</div><div style='font-size:14px; color:red;'>{suggestions.strip()}</div>", unsafe_allow_html=True)
-                     elif show_content_suggestions and suggestions == "No Suggestions":
-                       st.markdown(f"<div style='font-size:16px; font-weight:bold; color:gray;'>Suggestions:</div><div style='font-size:14px; color:gray;'>{suggestions.strip()}</div>", unsafe_allow_html=True)
-                   else:
-                     if ": " in evaluation:
-                       parts = evaluation.split(": ", 1)
-                       if len(parts) == 2:
-                          label, text = parts
-                          st.markdown(f"<div style='font-size:16px; font-weight:bold;'>{label}:</div><div style='font-size:14px;'>{text}</div>", unsafe_allow_html=True)
-                       else:
-                          st.markdown(f" {evaluation}")
-                     else:
-                       st.markdown(f" {evaluation}")
-              else:
-                st.write("No content quality evaluation available.")
-            #Evaluate the link quality
-            with st.expander("Link Evaluation"):
-              try:
-                if soup:
-                  analysis = analyze_url(soup ,llm)
-                  for evaluation in analysis:
-                    parts = evaluation.split("Suggestions:")
-                    if len(parts) == 2:
-                      analysis, suggestions = parts
-                      st.markdown(f"<div style='font-size:16px; font-weight:bold;'>Analysis:</div><div style='font-size:14px;'>{analysis.strip()}</div>", unsafe_allow_html=True)
-                      if show_link_suggestions and suggestions != "No Suggestions":
-                       st.markdown(f"<div style='font-size:16px; font-weight:bold; color:red;'>Suggestions:</div><div style='font-size:14px; color:red;'>{suggestions.strip()}</div>", unsafe_allow_html=True)
-                      elif show_link_suggestions and suggestions == "No Suggestions":
-                       st.markdown(f"<div style='font-size:16px; font-weight:bold; color:gray;'>Suggestions:</div><div style='font-size:14px; color:gray;'>{suggestions.strip()}</div>", unsafe_allow_html=True)
-                    else:
-                      if ": " in evaluation:
-                         parts = evaluation.split(": ", 1)
-                         if len(parts) == 2:
-                          label, text = parts
-                          st.markdown(f"<div style='font-size:16px; font-weight:bold;'>{label}:</div><div style='font-size:14px;'>{text}</div>", unsafe_allow_html=True)
-                         else:
-                          st.markdown(f" {evaluation}")
-                      else:
-                       st.markdown(f" {evaluation}")
-              except Exception as e:
-                st.error(f"Error analyzing the blog: {e}")
+def show_suggestions(content, title, meta_description, soup, blog_url):
+    st.subheader("Suggestions")
+    
+    _, _, grade_suggestion, ease_suggestion = describe_readability(*calculate_readability(content))
+    if grade_suggestion or ease_suggestion:
+        with st.expander("Readability Suggestions"):
+            if grade_suggestion:
+                st.write(f"- {grade_suggestion}")
+            if ease_suggestion:
+                st.write(f"- {ease_suggestion}")
+    
+    seo_suggestions = optimize_seo_keywords(content, title, meta_description, blog_url, llm)
+    if any("Suggestions:" in item and "No Suggestions" not in item for item in seo_suggestions):
+        with st.expander("Keyword Optimization Suggestions"):
+            for item in seo_suggestions:
+                _, suggestions = item.split("Suggestions:") if "Suggestions:" in item else ("", "")
+                if suggestions.strip() and suggestions.strip() != "No Suggestions":
+                    st.write(suggestions.strip())
+    
+    content_suggestions = evaluate_content_quality(content, llm)
+    if any("Suggestions:" in item and "No Suggestions" not in item for item in content_suggestions):
+        with st.expander("Content Evaluation Suggestions"):
+            for item in content_suggestions:
+                _, suggestions = item.split("Suggestions:") if "Suggestions:" in item else ("", "")
+                if suggestions.strip() and suggestions.strip() != "No Suggestions":
+                    st.write(suggestions.strip())
+    
+    link_suggestions = analyze_url(soup, llm)
+    if any("Suggestions:" in item and "No Suggestions" not in item for item in link_suggestions):
+        with st.expander("Link Evaluation Suggestions"):
+            for item in link_suggestions:
+                _, suggestions = item.split("Suggestions:") if "Suggestions:" in item else ("", "")
+                if suggestions.strip() and suggestions.strip() != "No Suggestions":
+                    st.write(suggestions.strip())
 
 if __name__ == "__main__":
     main()
