@@ -61,3 +61,6 @@ ERROR:root:Error in evaluate_content_quality: 429 Resource has been exhausted (e
 ERROR:root:Error in evaluate_content_quality: 429 Resource has been exhausted (e.g. check quota).
 ERROR:root:Error in optimize_seo_keywords: 429 Resource has been exhausted (e.g. check quota).
 ERROR:root:Error in evaluate_content_quality: 429 Resource has been exhausted (e.g. check quota).
+ERROR:root:Error in analyze_readability: string indices must be integers, not 'str'
+ERROR:root:Error in analyze_readability: string indices must be integers, not 'str'
+ERROR:root:Error in analyze_readability: string indices must be integers, not 'str'
