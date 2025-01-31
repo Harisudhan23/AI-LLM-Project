@@ -160,7 +160,6 @@ def describe_readability(kincaid_grade, reading_ease):
     grade_suggestion = ""
     ease_suggestion = ""
 
-
     if kincaid_grade <= 5:
         grade_description = "Easy to read, suitable for younger audiences."
     elif 6 <= kincaid_grade <= 9:
@@ -198,28 +197,28 @@ def describe_readability(kincaid_grade, reading_ease):
     return grade_description, ease_description, grade_suggestion, ease_suggestion
 
 #Extract Keywords
-def extract_keywords_from_content(content, top_n=20):
-    """Extracts keywords from blog content using NLP."""
-    try:
-        # Print the text before sending to LLM
-        cleaned_content = clean_placeholder_text(content)
-        print_text_before_llm(cleaned_content, "Text Before Keyword Extraction LLM:")
-        doc = nlp(cleaned_content)
-        keywords = [
-            chunk.text.lower()
-            for chunk in doc.noun_chunks
-            if chunk.text.lower() not in nlp.Defaults.stop_words  # Exclude stopwords
-        ]
+# def extract_keywords_from_content(content, top_n=20):
+#     """Extracts keywords from blog content using NLP."""
+#     try:
+#         # Print the text before sending to LLM
+#         cleaned_content = clean_placeholder_text(content)
+#         print_text_before_llm(cleaned_content, "Text Before Keyword Extraction LLM:")
+#         doc = nlp(cleaned_content)
+#         keywords = [
+#             chunk.text.lower()
+#             for chunk in doc.noun_chunks
+#             if chunk.text.lower() not in nlp.Defaults.stop_words  # Exclude stopwords
+#         ]
 
-        # Count keyword frequencies
-        keyword_counts = Counter(keywords)
+#         # Count keyword frequencies
+#         keyword_counts = Counter(keywords)
 
-        # Get the top N keywords based on frequency
-        top_keywords = [keyword for keyword, _ in keyword_counts.most_common(top_n)]
-        return top_keywords
-    except Exception as e:
-        log_error("Error in extract_top_keywords_from_content", e)
-        return []
+#         # Get the top N keywords based on frequency
+#         top_keywords = [keyword for keyword, _ in keyword_counts.most_common(top_n)]
+#         return top_keywords
+#     except Exception as e:
+#         log_error("Error in extract_top_keywords_from_content", e)
+#         return []
 
 #Optimize Keywords for SEO
 def optimize_seo_keywords(content, page_title, meta_description, url, llm):
@@ -416,52 +415,98 @@ def analyze_url(soup, llm):
     return [remove_zw_chars(line) for line in processed_response]
 
 # Streamlit App
+
 def main():
-    st.title("Blog SEO Analyzer")
+    # Custom Styling
+    st.markdown(
+        """
+        <style>
+        .stButton button {
+            border-radius: 10px;
+            font-size: 16px;
+            padding: 8px 20px;
+        }
+        .stTextInput input {
+            font-size: 16px;
+            padding: 8px;
+        }
+        </style>
+        """, 
+        unsafe_allow_html=True
+    )
+
+    # Title and Header
+    st.title("🔍 Blog SEO Analyzer")
     st.markdown("---")
 
+    # Initialize session state
     if "blog_url" not in st.session_state:
-        st.session_state["blog_url"] = ""
-
+        st.session_state.blog_url = ""
     if "analysis_done" not in st.session_state:
-        st.session_state["analysis_done"] = False
+        st.session_state.analysis_done = False
+    if "show_suggestions" not in st.session_state:
+        st.session_state.show_suggestions = False
 
-    blog_url = st.text_input("Enter Blog URL:", value=st.session_state["blog_url"], placeholder="https://example.com/blog")
-
-    # Creating two columns for Clear (left) and Analyze (right)
-    col1, col2 = st.columns([1, 1])
-
-    with col2:
-        if st.button("Clear"):
-            st.session_state["blog_url"] = ""
-            st.session_state["analysis_done"] = False
-            st.rerun()
+    # Layout with columns for better alignment
+    col1, col2, col3 = st.columns([4, 1, 1])
 
     with col1:
-        analyze_btn = st.button("Analyze")
+        # URL input with session state management
+        blog_url = st.text_input(
+            "Enter Blog URL:", 
+            value=st.session_state.blog_url, 
+            key="blog_url", 
+            placeholder="https://example.com/blog"
+        )
 
+    with col2:
+        # Clear button inside the input field
+        if st.button("🗑 Clear"):
+            st.session_state.blog_url = ""
+            st.session_state.analysis_done = False
+            st.session_state.show_suggestions = False
+            st.rerun()  # Refresh UI
+
+    with col3:
+        analyze_btn = st.button("🚀 Analyze")
+
+    # If analysis button is clicked
     if analyze_btn:
-        with st.spinner("Processing..."):
+        with st.spinner("🔍 Analyzing Blog... Please wait..."):
             soup = scrape_page_content(blog_url)
             if not soup:
-                st.error("Failed to retrieve page content")
+                st.error("❌ Failed to retrieve page content")
                 return
-
+            
             content, title, meta_description = retrieve_blog_content(blog_url, soup)
             if not content:
-                st.error("Failed to extract content from the blog")
+                st.error("❌ Failed to extract content from the blog")
                 return
 
-            st.session_state["analysis_done"] = True  # Enable "Show Suggestions" button
             show_analysis(content, title, meta_description, soup, blog_url)
 
-    # Show "Show Suggestions" button only after analysis
-    if st.session_state["analysis_done"]:
-        suggest_btn = st.button("Show Suggestions")
-        if suggest_btn:
-            with st.spinner("Processing Suggestions..."):
-                soup = scrape_page_content(blog_url)
-                content, title, meta_description = retrieve_blog_content(blog_url, soup)
+            # Store analysis state
+            st.session_state.analysis_done = True
+            st.session_state.show_suggestions = False
+
+    # Show "Analysis Complete!" message if analysis is done
+    if st.session_state.analysis_done and not st.session_state.show_suggestions:
+        st.success("✅ Analysis Complete!")  # Confirmation message
+        
+        if st.button("💡 Show SEO Suggestions"):
+            st.session_state.show_suggestions = True
+            st.rerun()
+
+    # Show "Back to Analysis" button when viewing suggestions
+    if st.session_state.show_suggestions:
+        if st.button("🔙 Back to Analysis"):
+            st.session_state.show_suggestions = False
+            st.rerun()
+
+        with st.spinner("✨ Generating suggestions..."):
+            soup = scrape_page_content(blog_url)
+            content, title, meta_description = retrieve_blog_content(blog_url, soup)
+            if content:
                 show_suggestions(content, title, meta_description, soup, blog_url)
 
 def show_analysis(content, title, meta_description, soup, blog_url):
@@ -473,12 +518,12 @@ def show_analysis(content, title, meta_description, soup, blog_url):
         st.write(f"**Flesch-Kincaid Grade Level:** {readability_grade} - {grade_description}")
         st.write(f"**Flesch Reading Ease:** {readability_ease} - {ease_description}")
 
-    extracted_keywords = extract_keywords_from_content(content)
-    with st.expander("Extracted Keywords"):
-        if extracted_keywords:
-                st.markdown("\n".join([f"{i+1}. {keyword}" for i, keyword in enumerate(extracted_keywords)]))
-        else:
-                st.warning("No keywords found.")
+    # extracted_keywords = extract_keywords_from_content(content)
+    # with st.expander("Extracted Keywords"):
+    #     if extracted_keywords:
+    #             st.markdown("\n".join([f"{i+1}. {keyword}" for i, keyword in enumerate(extracted_keywords)]))
+    #     else:
+    #             st.warning("No keywords found.")
 
     seo_analysis = optimize_seo_keywords(content, title, meta_description, blog_url, llm)
     with st.expander("Keyword Optimization Analysis"):

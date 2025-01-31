@@ -152,3 +152,4 @@ metadata {
   value: "google.ai.generativelanguage.v1beta.GenerativeService.GenerateContent"
 }
 ]
+ERROR:root:Error in scrape_page_content: Invalid URL '': No scheme supplied. Perhaps you meant https://?

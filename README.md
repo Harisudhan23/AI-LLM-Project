@@ -22,7 +22,9 @@
 4. Output: The results are displayed in an interactive Streamlit interface, allowing users to explore the analysis and suggestions.
 ## Installation
 1. Clone the Repository:
-'''
+###
 git clone https://github.com/Harisudhan23/AI-LLM-Project.git
 cd blog-seo-analyzer 
-'''
+
+###
+
