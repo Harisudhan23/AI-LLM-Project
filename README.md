@@ -20,11 +20,41 @@
   - Content Quality: Assesses the quality of the content and provides improvement suggestions.
   - Link Structure: Analyzes the internal and external links for SEO best practices.
 4. Output: The results are displayed in an interactive Streamlit interface, allowing users to explore the analysis and suggestions.
+
 ## Installation
 1. Clone the Repository:
 ###
 git clone https://github.com/Harisudhan23/AI-LLM-Project.git
 cd blog-seo-analyzer 
+2. Install Dependencies:
+###  
+pip install -r requirements.txt
+3. Set Up API Key:
+### 
+Replace the API_KEY in the code with your Google Generative AI API key.
+4. Run the Streamlit App
 
-###
+## Usage
+1. Enter Blog URL: Input the URL of the blog post you want to analyze.
+
+2. Click "Analyze": The tool will process the blog content and display the analysis.
+
+3. Click "Show Suggestions": The tool will provide actionable suggestions for improving the blog's SEO and content quality.
+
+## Dependencies
+
+- Streamlit: For building the web interface.
+- Requests: For making HTTP requests to fetch blog content.
+- BeautifulSoup: For parsing HTML content.
+- LangChain: For interacting with Google's Generative AI (Gemini).
+- spaCy: For natural language processing and keyword extraction.
+- textstat: For calculating readability scores.
+- Pandas: For data manipulation (if needed).
+
+## License
+  This project is licensed under the MIT License. See the LICENSE file for details.
+  
+
+
+
 
